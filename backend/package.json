@@ -1,0 +1,31 @@
+{
+  "name": "piletero-backend",
+  "version": "0.1.0",
+  "description": "PILETERO backend server with Express, SQLite, and Socket.io",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "pool",
+    "maintenance",
+    "backend",
+    "express",
+    "socket.io"
+  ],
+  "author": "Diego Robalo",
+  "license": "Proprietary",
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6",
+    "socket.io": "^4.6.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "jsonwebtoken": "^9.0.0",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {}
+}
