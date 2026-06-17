@@ -1,6 +1,7 @@
 import './App.css'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import AgendaPage from './pages/AgendaPage'
+import VisitFormPage from './pages/VisitFormPage'
 
 function App() {
   return (
@@ -8,8 +9,7 @@ function App() {
       <Routes>
         <Route path="/" element={<AgendaPage />} />
         <Route path="/agenda" element={<AgendaPage />} />
-        {/* Task 10: Visita form route will be added */}
-        {/* <Route path="/visita/:clienteId/:fecha" element={<VisitaForm />} /> */}
+        <Route path="/visita/:clienteId/:fecha" element={<VisitFormPage />} />
       </Routes>
     </Router>
   )
