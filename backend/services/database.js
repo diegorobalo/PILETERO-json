@@ -204,10 +204,10 @@ class DatabaseService {
       fecha,
       hora_inicio || null,
       hora_fin || null,
-      tareas_realizadas || null,
+      typeof tareas_realizadas === 'string' ? tareas_realizadas : (tareas_realizadas ? JSON.stringify(tareas_realizadas) : null),
       cloro_ppm || null,
       ph || null,
-      quimicos_usados || null,
+      typeof quimicos_usados === 'string' ? quimicos_usados : (quimicos_usados ? JSON.stringify(quimicos_usados) : null),
       observaciones || null
     ];
 
@@ -236,7 +236,13 @@ class DatabaseService {
     for (const [key, value] of Object.entries(data)) {
       if (allowedFields.includes(key)) {
         updates.push(`${key} = ?`);
-        params.push(value);
+
+        // Handle JSON fields
+        if (key === 'tareas_realizadas' || key === 'quimicos_usados') {
+          params.push(typeof value === 'string' ? value : (value ? JSON.stringify(value) : null));
+        } else {
+          params.push(value);
+        }
       }
     }
 
