@@ -1,0 +1,36 @@
+{
+  "name": "piletero",
+  "version": "0.1.0",
+  "description": "Offline-first mobile and desktop pool maintenance registration app",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "install:all": "npm install",
+    "dev": "npm run dev --workspaces",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build:backend": "npm run build --workspace=backend",
+    "build:frontend": "npm run build --workspace=frontend",
+    "test:backend": "npm run test --workspace=backend",
+    "test:frontend": "npm run test --workspace=frontend"
+  },
+  "keywords": [
+    "pool",
+    "maintenance",
+    "offline-first",
+    "mobile",
+    "desktop"
+  ],
+  "author": "Diego Robalo",
+  "license": "Proprietary",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=7.0.0"
+  }
+}
