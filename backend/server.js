@@ -7,6 +7,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import databaseService from './services/database.js';
+import routes from './api/routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -61,6 +62,9 @@ app.get('/api/health', (req, res) => {
     version: '0.1.0'
   });
 });
+
+// Mount API routes
+app.use('/api', routes);
 
 // ==================== SOCKET.IO CONNECTION HANDLING ====================
 
