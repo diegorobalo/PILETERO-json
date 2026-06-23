@@ -363,4 +363,20 @@ router.delete('/inventario/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== CONFIGURACION ENDPOINTS ====================
+
+router.get('/configuracion', async (req, res) => {
+  try {
+    res.json(await databaseService.getAllConfig());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/configuracion', async (req, res) => {
+  try {
+    const { clave, valor } = req.body;
+    if (!clave) return res.status(400).json({ error: 'clave requerida' });
+    res.json(await databaseService.setConfig(clave, valor ?? ''));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 export default router;

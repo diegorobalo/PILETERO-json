@@ -396,6 +396,26 @@ class DatabaseService {
     return this.execute('DELETE FROM inventario WHERE id = ?', [id]);
   }
 
+  // ==================== CONFIGURACION ====================
+
+  async getConfig(clave) {
+    const row = await this.queryOne('SELECT valor FROM configuracion WHERE clave = ?', [clave]);
+    return row ? row.valor : null;
+  }
+
+  async getAllConfig() {
+    const rows = await this.query('SELECT clave, valor FROM configuracion');
+    return rows.reduce((acc, r) => { acc[r.clave] = r.valor; return acc; }, {});
+  }
+
+  async setConfig(clave, valor) {
+    await this.execute(
+      'INSERT INTO configuracion (clave, valor) VALUES (?, ?) ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor',
+      [clave, valor]
+    );
+    return { clave, valor };
+  }
+
   // ==================== SYNC ====================
 
   /**
