@@ -363,6 +363,12 @@ router.delete('/inventario/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+router.get('/inventario/:id/movimientos', async (req, res) => {
+  try {
+    res.json(await databaseService.getMovimientosByInsumo(req.params.id));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==================== CONFIGURACION ENDPOINTS ====================
 
 router.get('/configuracion', async (req, res) => {

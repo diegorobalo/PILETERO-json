@@ -170,6 +170,9 @@ const apiClient = {
   deleteInsumo(id) {
     return axiosInstance.delete(`/inventario/${id}`).then((r) => r.data);
   },
+  getMovimientosInsumo(id) {
+    return axiosInstance.get(`/inventario/${id}/movimientos`).then(r => r.data);
+  },
 
   // ============== FOTOS ENDPOINTS ==============
 

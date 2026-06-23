@@ -240,6 +240,47 @@ class DatabaseService {
     ];
 
     const result = await this.execute(sql, params);
+
+    // Auto-descuento de inventario basado en quimicos usados
+    const quimicosRaw = typeof quimicos_usados === 'string'
+      ? JSON.parse(quimicos_usados || '{}')
+      : (quimicos_usados || {});
+
+    const QUIMICO_MAP = {
+      cloroGranulado: 'cloro granulado',
+      cloroLiquido: 'cloro líquido',
+      phMas: 'ph+',
+      phMenos: 'ph−',
+      algicida: 'algicida',
+      floculante: 'floculante',
+    };
+
+    for (const [clave, nombre] of Object.entries(QUIMICO_MAP)) {
+      const cant = parseFloat(quimicosRaw[clave]);
+      if (!cant || cant <= 0) continue;
+      try {
+        const insumo = await this.queryOne(
+          "SELECT id FROM inventario WHERE LOWER(nombre) LIKE ? LIMIT 1",
+          [`%${nombre}%`]
+        );
+        if (!insumo) continue;
+        await this.execute(
+          'UPDATE inventario SET stock_actual = MAX(0, stock_actual - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [cant, insumo.id]
+        );
+        await this.registrarMovimiento({
+          insumo_id: insumo.id,
+          tipo: 'uso',
+          cantidad: -cant,
+          origen: 'visita',
+          referencia_id: result.lastID,
+          fecha: fecha,
+        });
+      } catch (err) {
+        console.warn(`[auto-stock] No se pudo descontar ${nombre}:`, err.message);
+      }
+    }
+
     return this.queryOne('SELECT * FROM visitas WHERE id = ?', [result.lastID]);
   }
 
@@ -389,11 +430,34 @@ class DatabaseService {
       'UPDATE inventario SET stock_actual = MAX(0, stock_actual + ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [cantidad, id]
     );
+    await this.registrarMovimiento({
+      insumo_id: id,
+      tipo: cantidad > 0 ? 'compra' : 'uso',
+      cantidad,
+      origen: 'manual',
+      fecha: new Date().toISOString().split('T')[0],
+    });
     return this.getInventarioById(id);
   }
 
   async deleteInventario(id) {
     return this.execute('DELETE FROM inventario WHERE id = ?', [id]);
+  }
+
+  // ==================== MOVIMIENTOS INVENTARIO ====================
+
+  async registrarMovimiento({ insumo_id, tipo, cantidad, origen, referencia_id, fecha }) {
+    await this.execute(
+      'INSERT INTO movimientos_inventario (insumo_id, tipo, cantidad, origen, referencia_id, fecha) VALUES (?, ?, ?, ?, ?, ?)',
+      [insumo_id, tipo, cantidad, origen || 'manual', referencia_id || null, fecha || new Date().toISOString().split('T')[0]]
+    );
+  }
+
+  async getMovimientosByInsumo(insumoId, limit = 50) {
+    return this.query(
+      'SELECT * FROM movimientos_inventario WHERE insumo_id = ? ORDER BY fecha DESC, created_at DESC LIMIT ?',
+      [insumoId, limit]
+    );
   }
 
   // ==================== CONFIGURACION ====================
