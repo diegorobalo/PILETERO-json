@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS clientes (
   tipo_abono TEXT,
   precio_abono REAL,
   dias_visita TEXT,
+  frecuencia_visita TEXT DEFAULT 'semanal',
+  grupo_semana TEXT DEFAULT 'A',
   notas_acceso TEXT,
   activo BOOLEAN DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -61,11 +63,34 @@ CREATE TABLE IF NOT EXISTS pagos (
   FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
 );
 
+-- Inventory/Stock table
+CREATE TABLE IF NOT EXISTS inventario (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nombre TEXT NOT NULL,
+  unidad TEXT NOT NULL DEFAULT 'g',
+  stock_actual REAL NOT NULL DEFAULT 0,
+  stock_minimo REAL NOT NULL DEFAULT 0,
+  precio_unitario REAL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Client reference photos table
+CREATE TABLE IF NOT EXISTS fotos_clientes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cliente_id INTEGER NOT NULL,
+  tipo TEXT,
+  ruta_archivo TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
+);
+
 -- Create indexes on commonly queried fields
 CREATE INDEX IF NOT EXISTS idx_visitas_cliente_id ON visitas(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_visitas_fecha ON visitas(fecha);
 CREATE INDEX IF NOT EXISTS idx_visitas_sincronizada ON visitas(sincronizada);
 CREATE INDEX IF NOT EXISTS idx_fotos_visita_id ON fotos(visita_id);
 CREATE INDEX IF NOT EXISTS idx_pagos_cliente_id ON pagos(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_fotos_clientes_cliente_id ON fotos_clientes(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_pagos_fecha ON pagos(fecha);
 CREATE INDEX IF NOT EXISTS idx_clientes_activo ON clientes(activo);

@@ -86,6 +86,19 @@ router.put('/clientes/:id', async (req, res) => {
 // ==================== VISITAS ENDPOINTS ====================
 
 /**
+ * GET /api/visitas
+ * Get all visits with client info
+ */
+router.get('/visitas', async (req, res) => {
+  try {
+    const visitas = await databaseService.getAllVisitas();
+    res.json(visitas);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve visits' });
+  }
+});
+
+/**
  * GET /api/visitas/fecha/:fecha
  * Get visits for a specific date
  */
@@ -172,56 +185,182 @@ router.put('/visitas/:id', async (req, res) => {
   }
 });
 
+/**
+ * DELETE /api/visitas/:id
+ */
+router.delete('/visitas/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const visita = await databaseService.queryOne('SELECT * FROM visitas WHERE id = ?', [id]);
+    if (!visita) {
+      return res.status(404).json({ error: 'Visita not found' });
+    }
+    await databaseService.deleteVisita(id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting visita:', error);
+    res.status(500).json({ error: 'Failed to delete visit' });
+  }
+});
+
+/**
+ * GET /api/visitas/:id/fotos
+ * Get photos for a specific visit
+ */
+router.get('/visitas/:id/fotos', async (req, res) => {
+  try {
+    const fotos = await databaseService.getFotosByVisita(req.params.id);
+    res.json(fotos);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve photos' });
+  }
+});
+
+/**
+ * GET /api/clientes/:id/fotos-cliente
+ */
+router.get('/clientes/:id/fotos-cliente', async (req, res) => {
+  try {
+    res.json(await databaseService.getFotosCliente(req.params.id));
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve client photos' });
+  }
+});
+
+/**
+ * POST /api/clientes/:id/fotos-cliente
+ * body: { tipo, data }  — max 2 fotos por cliente
+ */
+router.post('/clientes/:id/fotos-cliente', async (req, res) => {
+  try {
+    const clienteId = req.params.id;
+    const { tipo, data } = req.body;
+    if (!data) return res.status(400).json({ error: 'data (base64) es requerido' });
+    const existentes = await databaseService.getFotosCliente(clienteId);
+    if (existentes.length >= 2) return res.status(400).json({ error: 'Máximo 2 fotos por cliente' });
+    const foto = await databaseService.saveFotoCliente({ cliente_id: clienteId, tipo, data });
+    res.status(201).json(foto);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to save client photo' });
+  }
+});
+
+/**
+ * DELETE /api/fotos-cliente/:id
+ */
+router.delete('/fotos-cliente/:id', async (req, res) => {
+  try {
+    await databaseService.deleteFotoCliente(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete client photo' });
+  }
+});
+
+/**
+ * PATCH /api/clientes/aumento-masivo
+ * Apply % increase to all clients' precio_abono
+ */
+router.patch('/clientes/aumento-masivo', async (req, res) => {
+  try {
+    const { porcentaje } = req.body;
+    const pct = parseFloat(porcentaje);
+    if (isNaN(pct) || pct === 0 || pct < -99 || pct > 200) {
+      return res.status(400).json({ error: 'porcentaje debe ser entre -99 y 200 (sin incluir 0)' });
+    }
+    const result = await databaseService.aumentoPreciosMasivo(pct);
+    res.json({ success: true, updated: result.updated });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to apply price increase' });
+  }
+});
+
 // ==================== PAGOS ENDPOINTS ====================
 
 /**
+ * GET /api/pagos
+ * Get all payments with client info
+ */
+router.get('/pagos', async (req, res) => {
+  try {
+    res.json(await databaseService.getAllPagos());
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve payments' });
+  }
+});
+
+/**
  * POST /api/pagos
- * Create a new payment
- * Required: cliente_id, monto
  */
 router.post('/pagos', async (req, res) => {
   try {
-    const { cliente_id, monto, metodo_pago } = req.body;
-
-    // Validate required fields
-    if (!cliente_id || !monto) {
-      return res.status(400).json({ error: 'cliente_id and monto are required' });
-    }
-
-    // Check if client exists
-    const cliente = await databaseService.getClienteById(cliente_id);
-    if (!cliente) {
-      return res.status(404).json({ error: 'Cliente not found' });
-    }
-
-    const pago = await databaseService.createPago(cliente_id, monto, metodo_pago);
+    const { cliente_id, monto } = req.body;
+    if (!cliente_id || !monto) return res.status(400).json({ error: 'cliente_id and monto son requeridos' });
+    const pago = await databaseService.createPago(req.body);
     res.status(201).json(pago);
   } catch (error) {
-    console.error('Error creating pago:', error);
     res.status(500).json({ error: 'Failed to create payment' });
   }
 });
 
 /**
  * GET /api/pagos/cliente/:clienteId
- * Get payments for a specific client
  */
 router.get('/pagos/cliente/:clienteId', async (req, res) => {
   try {
-    const { clienteId } = req.params;
-
-    // Check if client exists
-    const cliente = await databaseService.getClienteById(clienteId);
-    if (!cliente) {
-      return res.status(404).json({ error: 'Cliente not found' });
-    }
-
-    const pagos = await databaseService.getPagosByCliente(clienteId);
-    res.json(pagos);
+    res.json(await databaseService.getPagosByCliente(req.params.clienteId));
   } catch (error) {
-    console.error('Error getting pagos by cliente:', error);
     res.status(500).json({ error: 'Failed to retrieve payments' });
   }
+});
+
+/**
+ * DELETE /api/pagos/:id
+ */
+router.delete('/pagos/:id', async (req, res) => {
+  try {
+    await databaseService.deletePago(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete payment' });
+  }
+});
+
+// ==================== INVENTARIO ENDPOINTS ====================
+
+router.get('/inventario', async (req, res) => {
+  try {
+    res.json(await databaseService.getAllInventario());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/inventario', async (req, res) => {
+  try {
+    if (!req.body.nombre) return res.status(400).json({ error: 'nombre requerido' });
+    res.status(201).json(await databaseService.createInventario(req.body));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/inventario/:id', async (req, res) => {
+  try {
+    res.json(await databaseService.updateInventario(req.params.id, req.body));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/inventario/:id/ajustar  body: { cantidad: +100 | -50 }
+router.patch('/inventario/:id/ajustar', async (req, res) => {
+  try {
+    const { cantidad } = req.body;
+    if (cantidad === undefined) return res.status(400).json({ error: 'cantidad requerida' });
+    res.json(await databaseService.ajustarStock(req.params.id, cantidad));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/inventario/:id', async (req, res) => {
+  try {
+    await databaseService.deleteInventario(req.params.id);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 export default router;

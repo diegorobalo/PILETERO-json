@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="100" fill="#2563eb"/>
+  <!-- Pool water -->
+  <rect x="72" y="210" width="368" height="170" rx="18" fill="#1d4ed8"/>
+  <!-- Wave 1 -->
+  <path d="M72 270 Q152 248 232 270 Q312 292 392 270 L392 310 Q312 332 232 310 Q152 288 72 310 Z" fill="#60a5fa" opacity="0.8"/>
+  <!-- Wave 2 -->
+  <path d="M72 310 Q152 288 232 310 Q312 332 392 310 L392 380 L72 380 Z" fill="#93c5fd" opacity="0.5"/>
+  <!-- Letter P bold -->
+  <text x="256" y="198" font-family="Arial Black, Impact, sans-serif" font-size="210" font-weight="900" text-anchor="middle" dominant-baseline="middle" fill="white" letter-spacing="-5">P</text>
+</svg>

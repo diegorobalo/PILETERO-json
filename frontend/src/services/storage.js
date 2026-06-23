@@ -9,6 +9,8 @@ class StorageService {
     this.dbName = 'piletero_db';
     this.version = 1;
     this.db = null;
+    // Initialize storage immediately on instance creation
+    this.initPromise = this.init();
   }
 
   /**
@@ -220,6 +222,26 @@ class StorageService {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
+  }
+
+  async markVisitaSincronizada(id) {
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction(['visitas'], 'readwrite')
+      const store = tx.objectStore('visitas')
+      const req = store.get(id)
+      req.onsuccess = () => {
+        const v = req.result
+        if (v) {
+          v.sincronizada = true
+          const putReq = store.put(v)
+          putReq.onsuccess = () => resolve()
+          putReq.onerror = () => reject(putReq.error)
+        } else {
+          resolve()
+        }
+      }
+      req.onerror = () => reject(req.error)
+    })
   }
 
   // ============== FOTOS METHODS ==============

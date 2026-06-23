@@ -74,27 +74,28 @@ class SyncService {
 
     for (const visit of visitData) {
       try {
+        // Strip the IndexedDB id — it's meaningless in SQLite.
+        // Use cliente_id + fecha as the dedup key instead.
+        const { id: mobileId, sincronizada, ...fields } = visit;
+
+        const existing = await databaseService.queryOne(
+          'SELECT id FROM visitas WHERE cliente_id = ? AND fecha = ?',
+          [fields.cliente_id, fields.fecha]
+        );
+
         let result;
-
-        if (visit.id) {
-          // Update existing visit
-          await databaseService.updateVisita(visit.id, visit);
-          result = { id: visit.id, action: 'updated' };
+        if (existing) {
+          await databaseService.updateVisita(existing.id, fields);
+          result = { mobileId, id: existing.id, action: 'updated' };
         } else {
-          // Create new visit (id is null/undefined from mobile)
-          const newVisita = await databaseService.createVisita(visit);
-          result = { id: newVisita.id, action: 'created' };
-        }
-
-        // Mark as synced after successful save
-        if (result.id) {
-          await databaseService.markSynced(result.id);
+          const newVisita = await databaseService.createVisita(fields);
+          result = { mobileId, id: newVisita.id, action: 'created' };
         }
 
         results.push(result);
       } catch (error) {
-        console.error(`Error syncing visit:`, error);
-        results.push({ id: visit.id, action: 'error', error: error.message });
+        console.error('Error syncing visit:', error);
+        results.push({ mobileId: visit.id, action: 'error', error: error.message });
       }
     }
 

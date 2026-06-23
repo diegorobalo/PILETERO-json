@@ -3,14 +3,20 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useDeviceType } from './hooks/useDeviceType'
 import Navigation from './components/Navigation'
 
-// Mobile Pages (already implemented)
+// Mobile Pages
 import AgendaPage from './pages/AgendaPage'
 import VisitFormPage from './pages/VisitFormPage'
+import MobileClientesPage from './pages/MobileClientesPage'
+import MobileInventarioPage from './pages/MobileInventarioPage'
 
-// Desktop Pages (placeholders for now)
+// Desktop Pages
 import DashboardPage from './pages/DashboardPage'
 import ClientsPage from './pages/ClientsPage'
 import FinancePage from './pages/FinancePage'
+import InventarioPage from './pages/InventarioPage'
+import VisitasPage from './pages/VisitasPage'
+import ReporteVisitaPage from './pages/ReporteVisitaPage'
+import ReciboPagoPage from './pages/ReciboPagoPage'
 
 /**
  * App - Main application component with conditional routing based on device type
@@ -37,6 +43,11 @@ function App() {
             <>
               <Route path="/" element={<AgendaPage />} />
               <Route path="/agenda" element={<AgendaPage />} />
+              <Route path="/clientes" element={<MobileClientesPage />} />
+              <Route path="/inventario" element={<MobileInventarioPage />} />
+              <Route path="/finance" element={<FinancePage />} />
+              <Route path="/reporte" element={<ReporteVisitaPage />} />
+              <Route path="/recibo" element={<ReciboPagoPage />} />
               <Route path="/visita/:clienteId/:fecha" element={<VisitFormPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </>
@@ -45,7 +56,11 @@ function App() {
             <>
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/clients" element={<ClientsPage />} />
+              <Route path="/visitas" element={<VisitasPage />} />
               <Route path="/finance" element={<FinancePage />} />
+              <Route path="/inventario" element={<InventarioPage />} />
+              <Route path="/reporte" element={<ReporteVisitaPage />} />
+              <Route path="/recibo" element={<ReciboPagoPage />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </>

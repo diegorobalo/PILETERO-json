@@ -85,6 +85,8 @@ class DatabaseService {
       tipo_abono,
       precio_abono,
       dias_visita,
+      frecuencia_visita,
+      grupo_semana,
       notas_acceso
     } = data;
 
@@ -92,9 +94,9 @@ class DatabaseService {
       INSERT INTO clientes (
         nombre, direccion, telefono, volumen_litros, tipo_construccion,
         equipamiento, modelo_filtro, tipo_abono, precio_abono,
-        dias_visita, notas_acceso
+        dias_visita, frecuencia_visita, grupo_semana, notas_acceso
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const params = [
@@ -108,6 +110,8 @@ class DatabaseService {
       tipo_abono || null,
       precio_abono || null,
       dias_visita || null,
+      frecuencia_visita || 'semanal',
+      grupo_semana || 'A',
       notas_acceso || null
     ];
 
@@ -130,6 +134,8 @@ class DatabaseService {
       'tipo_abono',
       'precio_abono',
       'dias_visita',
+      'frecuencia_visita',
+      'grupo_semana',
       'notas_acceso',
       'activo'
     ];
@@ -153,11 +159,33 @@ class DatabaseService {
     return this.getClienteById(id);
   }
 
+  // ==================== FOTOS (Photos) ====================
+
+  async getFotosByVisita(visitaId) {
+    return this.query('SELECT * FROM fotos WHERE visita_id = ?', [visitaId]);
+  }
+
+  async saveFoto({ visita_id, tipo, data }) {
+    // ruta_archivo stores base64 data for photos synced from mobile
+    const sql = 'INSERT INTO fotos (visita_id, tipo, ruta_archivo) VALUES (?, ?, ?)';
+    const result = await this.execute(sql, [visita_id, tipo || 'general', data]);
+    return result.lastID;
+  }
+
   // ==================== VISITAS (Visits) ====================
 
   /**
    * Get visits for a specific client
    */
+  async getAllVisitas(limit = 200) {
+    return this.query(
+      `SELECT v.*, c.nombre as cliente_nombre, c.direccion as cliente_direccion
+       FROM visitas v LEFT JOIN clientes c ON v.cliente_id = c.id
+       ORDER BY v.fecha DESC, v.created_at DESC LIMIT ?`,
+      [limit]
+    );
+  }
+
   async getVisitasByCliente(clienteId) {
     return this.query(
       'SELECT * FROM visitas WHERE cliente_id = ? ORDER BY fecha DESC',
@@ -255,22 +283,11 @@ class DatabaseService {
     return this.queryOne('SELECT * FROM visitas WHERE id = ?', [id]);
   }
 
-  // ==================== FOTOS (Photos) ====================
-
   /**
-   * Create a new photo record
+   * Delete a visit record
    */
-  async createFoto(visitaId, tipo, rutaArchivo) {
-    const sql = 'INSERT INTO fotos (visita_id, tipo, ruta_archivo) VALUES (?, ?, ?)';
-    const result = await this.execute(sql, [visitaId, tipo, rutaArchivo]);
-    return this.queryOne('SELECT * FROM fotos WHERE id = ?', [result.lastID]);
-  }
-
-  /**
-   * Get photos for a specific visit
-   */
-  async getFotosByVisita(visitaId) {
-    return this.query('SELECT * FROM fotos WHERE visita_id = ? ORDER BY uploaded_at', [visitaId]);
+  async deleteVisita(id) {
+    await this.execute('DELETE FROM visitas WHERE id = ?', [id]);
   }
 
   // ==================== PAGOS (Payments) ====================
@@ -278,23 +295,105 @@ class DatabaseService {
   /**
    * Create a new payment record
    */
-  async createPago(clienteId, monto, metodo) {
-    const sql = `
-      INSERT INTO pagos (cliente_id, monto, fecha, metodo_pago)
-      VALUES (?, ?, DATE('now'), ?)
-    `;
-    const result = await this.execute(sql, [clienteId, monto, metodo]);
+  async createPago({ cliente_id, monto, fecha, metodo_pago, estado }) {
+    const sql = `INSERT INTO pagos (cliente_id, monto, fecha, metodo_pago, estado)
+                 VALUES (?, ?, ?, ?, ?)`;
+    const result = await this.execute(sql, [
+      cliente_id, monto,
+      fecha || new Date().toISOString().split('T')[0],
+      metodo_pago || 'efectivo',
+      estado || 'pagado',
+    ]);
     return this.queryOne('SELECT * FROM pagos WHERE id = ?', [result.lastID]);
   }
 
-  /**
-   * Get payments for a specific client
-   */
+  async getAllPagos(limit = 500) {
+    return this.query(
+      `SELECT p.*, c.nombre as cliente_nombre, c.direccion as cliente_direccion
+       FROM pagos p LEFT JOIN clientes c ON p.cliente_id = c.id
+       ORDER BY p.fecha DESC, p.created_at DESC LIMIT ?`,
+      [limit]
+    );
+  }
+
   async getPagosByCliente(clienteId) {
     return this.query(
       'SELECT * FROM pagos WHERE cliente_id = ? ORDER BY fecha DESC',
       [clienteId]
     );
+  }
+
+  async deletePago(id) {
+    await this.execute('DELETE FROM pagos WHERE id = ?', [id]);
+  }
+
+  // ==================== FOTOS CLIENTES ====================
+
+  async getFotosCliente(clienteId) {
+    return this.query('SELECT * FROM fotos_clientes WHERE cliente_id = ? ORDER BY created_at', [clienteId]);
+  }
+
+  async saveFotoCliente({ cliente_id, tipo, data }) {
+    const result = await this.execute(
+      'INSERT INTO fotos_clientes (cliente_id, tipo, ruta_archivo) VALUES (?, ?, ?)',
+      [cliente_id, tipo || null, data]
+    );
+    return this.queryOne('SELECT * FROM fotos_clientes WHERE id = ?', [result.lastID]);
+  }
+
+  async deleteFotoCliente(id) {
+    await this.execute('DELETE FROM fotos_clientes WHERE id = ?', [id]);
+  }
+
+  async aumentoPreciosMasivo(porcentaje) {
+    const sql = `UPDATE clientes SET precio_abono = ROUND(precio_abono * (1.0 + ? / 100.0)), updated_at = CURRENT_TIMESTAMP
+                 WHERE activo = 1 AND precio_abono IS NOT NULL AND precio_abono > 0`
+    const result = await this.execute(sql, [porcentaje])
+    return { updated: result.changes }
+  }
+
+  // ==================== INVENTARIO ====================
+
+  async getAllInventario() {
+    return this.query('SELECT * FROM inventario ORDER BY nombre');
+  }
+
+  async getInventarioById(id) {
+    return this.queryOne('SELECT * FROM inventario WHERE id = ?', [id]);
+  }
+
+  async createInventario(data) {
+    const { nombre, unidad, stock_actual, stock_minimo, precio_unitario } = data;
+    const result = await this.execute(
+      'INSERT INTO inventario (nombre, unidad, stock_actual, stock_minimo, precio_unitario) VALUES (?, ?, ?, ?, ?)',
+      [nombre, unidad || 'g', stock_actual || 0, stock_minimo || 0, precio_unitario || null]
+    );
+    return this.getInventarioById(result.lastID);
+  }
+
+  async updateInventario(id, data) {
+    const allowed = ['nombre', 'unidad', 'stock_actual', 'stock_minimo', 'precio_unitario'];
+    const updates = [];
+    const params = [];
+    for (const [key, value] of Object.entries(data)) {
+      if (allowed.includes(key)) { updates.push(`${key} = ?`); params.push(value); }
+    }
+    if (!updates.length) return this.getInventarioById(id);
+    params.push(id);
+    await this.execute(`UPDATE inventario SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, params);
+    return this.getInventarioById(id);
+  }
+
+  async ajustarStock(id, cantidad) {
+    await this.execute(
+      'UPDATE inventario SET stock_actual = MAX(0, stock_actual + ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [cantidad, id]
+    );
+    return this.getInventarioById(id);
+  }
+
+  async deleteInventario(id) {
+    return this.execute('DELETE FROM inventario WHERE id = ?', [id]);
   }
 
   // ==================== SYNC ====================

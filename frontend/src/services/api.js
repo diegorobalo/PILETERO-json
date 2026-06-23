@@ -6,18 +6,26 @@
 
 import axios from 'axios';
 
-/**
- * Axios instance configured for the backend API
- * Base URL: http://localhost:3000/api
- * Timeout: 10 seconds
- */
 const axiosInstance = axios.create({
-  baseURL: 'http://localhost:3000/api',
-  timeout: 10000,
+  baseURL: '/api',
+  timeout: 5000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// Convierte errores de red/timeout en un error amigable con flag sinConexion
+axiosInstance.interceptors.response.use(
+  res => res,
+  err => {
+    if (!err.response) {
+      const e = new Error('Sin conexión al servidor');
+      e.sinConexion = true;
+      return Promise.reject(e);
+    }
+    return Promise.reject(err);
+  }
+);
 
 /**
  * API Client object with methods for all backend endpoints
@@ -77,6 +85,10 @@ const apiClient = {
    * @param {string} fecha - Date in YYYY-MM-DD format
    * @returns {Promise<array>} Array of visitas for that date
    */
+  getVisitas() {
+    return axiosInstance.get('/visitas').then((r) => r.data);
+  },
+
   getVisitasByFecha(fecha) {
     return axiosInstance
       .get(`/visitas/fecha/${fecha}`)
@@ -113,26 +125,68 @@ const apiClient = {
     return axiosInstance.put(`/visitas/${id}`, data).then((res) => res.data);
   },
 
-  // ============== PAGOS ENDPOINTS ==============
-
   /**
-   * Create a new pago (payment)
-   * @param {object} data - Pago data (cliente_id, monto, fecha, metodo, etc.)
-   * @returns {Promise<object>} The created pago with id
+   * Delete a visita
+   * @param {number} id - The visita id
    */
-  createPago(data) {
-    return axiosInstance.post('/pagos', data).then((res) => res.data);
+  deleteVisita(id) {
+    return axiosInstance.delete(`/visitas/${id}`).then((res) => res.data);
   },
 
-  /**
-   * Get all pagos for a specific cliente
-   * @param {number} clienteId - The cliente id
-   * @returns {Promise<array>} Array of pagos for that cliente
-   */
+  // ============== PAGOS ENDPOINTS ==============
+
   getPagosByCliente(clienteId) {
-    return axiosInstance
-      .get(`/pagos/cliente/${clienteId}`)
-      .then((res) => res.data);
+    return axiosInstance.get(`/pagos/cliente/${clienteId}`).then((res) => res.data);
+  },
+
+  aumentoPreciosMasivo(porcentaje) {
+    return axiosInstance.patch('/clientes/aumento-masivo', { porcentaje }).then(r => r.data);
+  },
+
+  getFotosCliente(clienteId) {
+    return axiosInstance.get(`/clientes/${clienteId}/fotos-cliente`).then(r => r.data);
+  },
+  saveFotoCliente(clienteId, { tipo, data }) {
+    return axiosInstance.post(`/clientes/${clienteId}/fotos-cliente`, { tipo, data }).then(r => r.data);
+  },
+  deleteFotoCliente(id) {
+    return axiosInstance.delete(`/fotos-cliente/${id}`).then(r => r.data);
+  },
+
+  // ============== INVENTARIO ENDPOINTS ==============
+
+  getInventario() {
+    return axiosInstance.get('/inventario').then((r) => r.data);
+  },
+  createInsumo(data) {
+    return axiosInstance.post('/inventario', data).then((r) => r.data);
+  },
+  updateInsumo(id, data) {
+    return axiosInstance.put(`/inventario/${id}`, data).then((r) => r.data);
+  },
+  ajustarStock(id, cantidad) {
+    return axiosInstance.patch(`/inventario/${id}/ajustar`, { cantidad }).then((r) => r.data);
+  },
+  deleteInsumo(id) {
+    return axiosInstance.delete(`/inventario/${id}`).then((r) => r.data);
+  },
+
+  // ============== FOTOS ENDPOINTS ==============
+
+  getFotosByVisita(visitaId) {
+    return axiosInstance.get(`/visitas/${visitaId}/fotos`).then((r) => r.data);
+  },
+
+  // ============== PAGOS ENDPOINTS ==============
+
+  getPagos() {
+    return axiosInstance.get('/pagos').then((r) => r.data);
+  },
+  createPago(data) {
+    return axiosInstance.post('/pagos', data).then((r) => r.data);
+  },
+  deletePago(id) {
+    return axiosInstance.delete(`/pagos/${id}`).then((r) => r.data);
   },
 };
 

@@ -1,129 +1,271 @@
-/**
- * DashboardPage - Desktop dashboard view
- * Displays summary statistics and recent visits
- * Data from IndexedDB storage service (no external fetching yet)
- */
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { apiClient } from '../services/api.js'
 
-import { useEffect, useState } from 'react';
-import StatCard from '../components/StatCard.jsx';
-import storageService from '../services/storage.js';
+function hoy() {
+  return new Date().toISOString().split('T')[0]
+}
+
+function mesActual() {
+  return new Date().toISOString().slice(0, 7)
+}
+
+function formatFechaCorta(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
+function formatHora(isoStr) {
+  if (!isoStr) return ''
+  try {
+    return new Date(isoStr).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+  } catch { return '' }
+}
+
+function formatCurrency(n) {
+  return '$' + Math.round(n).toLocaleString('es-AR')
+}
+
+function diasRestantesMes() {
+  const ahora = new Date()
+  const fin = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0)
+  return fin.getDate() - ahora.getDate()
+}
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState({
-    totalClientes: 0,
-    visitasHoy: 0,
-    ingresosMes: '$0',
-    pendienteCobro: '$0',
-  });
+  const navigate = useNavigate()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [clientes, setClientes] = useState([])
+  const [visitas, setVisitas] = useState([])
+  const [pagos, setPagos] = useState([])
 
-  /**
-   * Load statistics from IndexedDB storage
-   * Calculates totals and formats currency values
-   */
-  const loadStats = async () => {
+  async function cargar() {
     try {
-      // Get all data from storage
-      const clientes = await storageService.getAllClientes();
-      const visitas = await storageService.getAllVisitas();
+      setLoading(true); setError(null)
+      const [cs, vs, ps] = await Promise.all([
+        apiClient.getClientes(),
+        apiClient.getVisitas(),
+        apiClient.getPagos(),
+      ])
+      setClientes(cs)
+      setVisitas(vs)
+      setPagos(ps)
+    } catch {
+      setError('No se pudo conectar al servidor.')
+    } finally { setLoading(false) }
+  }
 
-      // Get today's date in YYYY-MM-DD format
-      const today = new Date().toISOString().split('T')[0];
+  useEffect(() => { cargar() }, [])
 
-      // Filter visitas for today
-      const visitasHoy = visitas.filter(visita => {
-        const visitaDate = visita.fecha ? visita.fecha.split('T')[0] : null;
-        return visitaDate === today;
-      });
+  const today = hoy()
+  const mes = mesActual()
 
-      // Calculate totals
-      const totalClientes = clientes.length;
-      const visitasTodayCount = visitasHoy.length;
+  const visitasHoy = visitas.filter(v => v.fecha === today)
+  const visitasMes = visitas.filter(v => v.fecha?.startsWith(mes))
+  const ultimasVisitas = visitas.slice(0, 8)
 
-      // Mock calculations for MVP
-      // ingresosMes: sum of client abono prices or mock value
-      // In real implementation, this would sum actual payments
-      const ingresosMes = clientes.length * 5000;
-      const pendienteCobro = clientes.length * 2000;
+  const pagosMes = pagos.filter(p => p.fecha?.startsWith(mes))
+  const cobradoMes = pagosMes.reduce((s, p) => s + (p.monto || 0), 0)
 
-      // Format currency using Argentine Spanish locale
-      const formatCurrency = (value) => {
-        return value.toLocaleString('es-AR', {
-          style: 'currency',
-          currency: 'ARS',
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 0,
-        });
-      };
+  const clientesConPrecio = clientes.filter(c => c.precio_abono > 0)
+  const esperadoMes = clientesConPrecio.reduce((s, c) => s + (c.precio_abono || 0), 0)
+  const pendienteMes = Math.max(0, esperadoMes - cobradoMes)
 
-      setStats({
-        totalClientes,
-        visitasHoy: visitasTodayCount,
-        ingresosMes: formatCurrency(ingresosMes),
-        pendienteCobro: formatCurrency(pendienteCobro),
-      });
-    } catch (error) {
-      console.error('Error loading dashboard stats:', error);
-    }
-  };
+  const clientesPagaron = new Set(pagosMes.map(p => p.cliente_id))
+  const clientesDeben = clientesConPrecio.filter(c => !clientesPagaron.has(c.id))
 
-  // Load stats on component mount
-  useEffect(() => {
-    loadStats();
-  }, []);
+  const mesNombre = new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
+  const fechaHoyLarga = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
 
   return (
     <div className="w-full min-h-screen bg-gray-50 p-6">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-900">
-          📊 Dashboard
-        </h1>
+      <div className="mb-6">
+        <p className="text-sm text-gray-400 capitalize">{fechaHoyLarga}</p>
+        <h1 className="text-3xl font-black text-gray-900">Panel principal</h1>
       </div>
 
-      {/* KPI Cards Grid - 2x2 layout */}
-      <div className="grid grid-cols-2 gap-4 mb-8">
-        {/* Card 1: Clientes Activos */}
-        <StatCard
-          label="Clientes Activos"
-          value={stats.totalClientes}
-          icon="👥"
-          color="blue"
-        />
+      {error && (
+        <div className="p-4 mb-4 bg-red-50 border border-red-200 rounded text-red-700 flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={cargar} className="underline text-sm">Reintentar</button>
+        </div>
+      )}
 
-        {/* Card 2: Visitas Hoy */}
-        <StatCard
-          label="Visitas Hoy"
-          value={stats.visitasHoy}
-          icon="✓"
-          color="green"
-        />
+      {loading ? (
+        <div className="text-center py-20 text-gray-400">Cargando...</div>
+      ) : (
+        <>
+          {/* Stats cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-2xl mb-1">👥</p>
+              <p className="text-3xl font-black text-gray-900">{clientes.length}</p>
+              <p className="text-sm text-gray-500 mt-1">Clientes activos</p>
+            </div>
+            <div className="bg-white rounded-xl border border-blue-200 p-5">
+              <p className="text-2xl mb-1">✅</p>
+              <p className="text-3xl font-black text-blue-700">{visitasMes.length}</p>
+              <p className="text-sm text-gray-500 mt-1">Visitas en {mesNombre}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-green-200 p-5">
+              <p className="text-2xl mb-1">💰</p>
+              <p className="text-3xl font-black text-green-700">{formatCurrency(cobradoMes)}</p>
+              <p className="text-sm text-gray-500 mt-1">Cobrado {mesNombre}</p>
+            </div>
+            <div className={`bg-white rounded-xl border p-5 ${pendienteMes > 0 ? 'border-red-200' : 'border-gray-200'}`}>
+              <p className="text-2xl mb-1">{pendienteMes > 0 ? '⏳' : '🎉'}</p>
+              <p className={`text-3xl font-black ${pendienteMes > 0 ? 'text-red-600' : 'text-gray-400'}`}>{formatCurrency(pendienteMes)}</p>
+              <p className="text-sm text-gray-500 mt-1">Pendiente cobro</p>
+            </div>
+          </div>
 
-        {/* Card 3: Ingresos Mes */}
-        <StatCard
-          label="Ingresos Mes"
-          value={stats.ingresosMes}
-          icon="💰"
-          color="green"
-        />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Columna principal: visitas */}
+            <div className="lg:col-span-2 space-y-6">
 
-        {/* Card 4: Por Cobrar */}
-        <StatCard
-          label="Por Cobrar"
-          value={stats.pendienteCobro}
-          icon="⏳"
-          color="yellow"
-        />
-      </div>
+              {/* Visitas de hoy */}
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-gray-900">
+                    Visitas hoy
+                    {visitasHoy.length > 0 && (
+                      <span className="ml-2 bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{visitasHoy.length}</span>
+                    )}
+                  </h2>
+                </div>
+                {visitasHoy.length === 0 ? (
+                  <p className="text-gray-400 text-sm">No hay visitas registradas para hoy.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {visitasHoy.map(v => (
+                      <div key={v.id} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-100">
+                        <div>
+                          <p className="font-bold text-gray-900">{v.cliente_nombre}</p>
+                          <p className="text-xs text-gray-500">{v.cliente_direccion}</p>
+                          {v.hora_inicio && <p className="text-xs text-blue-600 mt-0.5">🕐 {formatHora(v.hora_inicio)}</p>}
+                        </div>
+                        <button onClick={() => navigate('/reporte', { state: { visita: v } })}
+                          className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded font-medium hover:bg-blue-700">
+                          Ver reporte
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-      {/* Recent Visits Section */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">
-          Últimas Visitas
-        </h2>
-        <p className="text-sm text-gray-400">
-          Los datos aparecerán cuando sincronices desde el celular
-        </p>
-      </div>
+              {/* Últimas visitas */}
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-gray-900">Últimas visitas</h2>
+                  <button onClick={() => navigate('/visitas')} className="text-sm text-blue-600 hover:underline">Ver todas →</button>
+                </div>
+                {ultimasVisitas.length === 0 ? (
+                  <p className="text-gray-400 text-sm">Sin visitas registradas.</p>
+                ) : (
+                  <div className="divide-y divide-gray-100">
+                    {ultimasVisitas.map(v => (
+                      <div key={v.id} className="flex items-center justify-between py-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 truncate">{v.cliente_nombre}</p>
+                          <p className="text-xs text-gray-400">{v.cliente_direccion}</p>
+                        </div>
+                        <div className="text-right ml-4 shrink-0">
+                          <p className="text-sm text-gray-600 font-medium">{formatFechaCorta(v.fecha)}</p>
+                          {v.hora_inicio && <p className="text-xs text-gray-400">{formatHora(v.hora_inicio)}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Columna lateral: finanzas */}
+            <div className="space-y-6">
+              {/* Resumen del mes */}
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <h2 className="text-lg font-bold text-gray-900 mb-4">Cobros — {mesNombre}</h2>
+                <div className="space-y-2 mb-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Esperado</span>
+                    <span className="font-bold text-gray-700">{formatCurrency(esperadoMes)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Cobrado</span>
+                    <span className="font-bold text-green-700">{formatCurrency(cobradoMes)}</span>
+                  </div>
+                  <div className="border-t pt-2 flex justify-between text-sm">
+                    <span className="text-gray-500">Pendiente</span>
+                    <span className={`font-black ${pendienteMes > 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(pendienteMes)}</span>
+                  </div>
+                </div>
+                {esperadoMes > 0 && (
+                  <div className="w-full bg-gray-100 rounded-full h-2">
+                    <div className="bg-green-500 h-2 rounded-full transition-all"
+                      style={{ width: `${Math.min(100, Math.round(cobradoMes / esperadoMes * 100))}%` }} />
+                  </div>
+                )}
+                {esperadoMes > 0 && (
+                  <p className="text-xs text-gray-400 mt-2 text-right">
+                    {Math.min(100, Math.round(cobradoMes / esperadoMes * 100))}% cobrado · {diasRestantesMes()} días restantes
+                  </p>
+                )}
+                <button onClick={() => navigate('/finance')} className="w-full mt-4 text-sm text-blue-600 hover:underline text-center block">
+                  Ir a Finanzas →
+                </button>
+              </div>
+
+              {/* Clientes que deben */}
+              {clientesDeben.length > 0 && (
+                <div className="bg-white rounded-xl border border-red-200 p-5">
+                  <h2 className="text-lg font-bold text-gray-900 mb-3">
+                    Deben pagar
+                    <span className="ml-2 bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">{clientesDeben.length}</span>
+                  </h2>
+                  <div className="space-y-2">
+                    {clientesDeben.slice(0, 6).map(c => (
+                      <div key={c.id} className="flex items-center justify-between">
+                        <p className="text-sm text-gray-800 font-medium truncate flex-1">{c.nombre}</p>
+                        <p className="text-sm font-bold text-red-600 ml-2 shrink-0">{formatCurrency(c.precio_abono)}</p>
+                      </div>
+                    ))}
+                    {clientesDeben.length > 6 && (
+                      <p className="text-xs text-gray-400">+{clientesDeben.length - 6} más</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Accesos rápidos */}
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <h2 className="text-base font-bold text-gray-900 mb-3">Accesos rápidos</h2>
+                <div className="space-y-2">
+                  <button onClick={() => navigate('/clients')}
+                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700 flex items-center gap-2">
+                    👥 Gestionar clientes
+                  </button>
+                  <button onClick={() => navigate('/visitas')}
+                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700 flex items-center gap-2">
+                    📋 Ver todas las visitas
+                  </button>
+                  <button onClick={() => navigate('/finance')}
+                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700 flex items-center gap-2">
+                    💰 Finanzas
+                  </button>
+                  <button onClick={() => navigate('/inventario')}
+                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700 flex items-center gap-2">
+                    📦 Inventario
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
-  );
+  )
 }

@@ -1,11 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import sqlite3 from 'sqlite3';
-import { createServer } from 'http';
+import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { networkInterfaces } from 'os';
 import databaseService from './services/database.js';
 import syncService from './services/sync-service.js';
 import routes from './api/routes.js';
@@ -15,8 +16,8 @@ const __dirname = dirname(__filename);
 
 // Initialize Express app
 const app = express();
-const httpServer = createServer(app);
-const io = new SocketIOServer(httpServer, {
+const server = http.createServer(app);
+const io = new SocketIOServer(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST']
@@ -38,27 +39,41 @@ const db = new sqlite3.Database(dbPath, (err) => {
   console.log('Connected to SQLite database at:', dbPath);
 });
 
-// Initialize database schema
+// Initialize database — schema + migrations — then start server
 const schema = readFileSync(join(__dirname, 'db', 'schema.sql'), 'utf8');
+const MIGRATIONS = [
+  "ALTER TABLE clientes ADD COLUMN frecuencia_visita TEXT DEFAULT 'semanal'",
+  "ALTER TABLE clientes ADD COLUMN grupo_semana TEXT DEFAULT 'A'",
+  "CREATE TABLE IF NOT EXISTS fotos_clientes (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente_id INTEGER NOT NULL, tipo TEXT, ruta_archivo TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE)",
+  "CREATE INDEX IF NOT EXISTS idx_fotos_clientes_cliente_id ON fotos_clientes(cliente_id)",
+];
+
 db.exec(schema, (err) => {
   if (err) {
     console.error('Error initializing database schema:', err);
     process.exit(1);
   }
-  console.log('Database initialized with schema');
+  console.log('Database schema OK');
+
+  let pending = MIGRATIONS.length;
+  MIGRATIONS.forEach(sql => {
+    db.run(sql, (migErr) => {
+      if (migErr && !migErr.message.includes('duplicate column')) {
+        console.error('Migration warning:', migErr.message);
+      }
+      pending--;
+      if (pending === 0) {
+        console.log('Migrations OK — starting server');
+        databaseService.init(db);
+        syncService.init();
+        startServer();
+      }
+    });
+  });
 });
-
-// Initialize database service
-databaseService.init(db);
-
-// Initialize sync service
-syncService.init();
 
 // ==================== REST API ENDPOINTS ====================
 
-/**
- * Health check endpoint
- */
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -81,11 +96,6 @@ io.on('connection', (socket) => {
 
   // ==================== SYNC EVENTS ====================
 
-  /**
-   * sync:request
-   * Mobile requests current client data to sync
-   * Receives nothing, sends back list of all active clients
-   */
   socket.on('sync:request', async (data) => {
     try {
       console.log(`[${socket.id}] sync:request received`);
@@ -107,11 +117,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  /**
-   * sync:visitas
-   * Mobile sends new/updated visits to server
-   * Receives array of visit objects, saves them, marks as synced
-   */
   socket.on('sync:visitas', async (data) => {
     try {
       console.log(`[${socket.id}] sync:visitas received with ${data?.visitas?.length || 0} visits`);
@@ -137,11 +142,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  /**
-   * sync:clientes
-   * Mobile sends new/updated clients to server
-   * Receives array of client objects, saves them
-   */
   socket.on('sync:clientes', async (data) => {
     try {
       console.log(`[${socket.id}] sync:clientes received with ${data?.clientes?.length || 0} clients`);
@@ -158,7 +158,14 @@ io.on('connection', (socket) => {
         timestamp: new Date().toISOString()
       });
 
-      console.log(`[${socket.id}] Synced ${results.length} clients successfully`);
+      // Enviar lista actualizada con IDs reales para que el celular reemplace los IDs temporales
+      const updatedClientes = await syncService.getClientDataForSync();
+      socket.emit('sync:clientes_refreshed', {
+        clientes: updatedClientes,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`[${socket.id}] Synced ${results.length} clients, pushed ${updatedClientes.length} back`);
     } catch (error) {
       console.error(`[${socket.id}] Error in sync:clientes:`, error);
       socket.emit('sync:error', {
@@ -167,32 +174,37 @@ io.on('connection', (socket) => {
     }
   });
 
-  /**
-   * sync:photos
-   * Mobile sends photos (for future implementation)
-   * For now: just acknowledge receipt
-   */
-  socket.on('sync:photos', async (data) => {
+  socket.on('sync:fotos', async (data) => {
     try {
-      console.log(`[${socket.id}] sync:photos received - acknowledging (not yet implemented)`);
-
-      socket.emit('sync:photos:ack', {
-        success: true,
-        message: 'Photos received - implementation pending',
-        timestamp: new Date().toISOString()
-      });
+      const fotos = data?.fotos || [];
+      console.log(`[${socket.id}] sync:fotos received: ${fotos.length} photo(s)`);
+      let saved = 0;
+      for (const foto of fotos) {
+        try {
+          const existing = await databaseService.queryOne(
+            'SELECT id FROM fotos WHERE visita_id = ? AND tipo = ?',
+            [foto.visita_id_server, foto.tipo]
+          );
+          if (!existing) {
+            await databaseService.saveFoto({
+              visita_id: foto.visita_id_server,
+              tipo: foto.tipo,
+              data: foto.data,
+            });
+            saved++;
+          }
+        } catch (err) {
+          console.error('Error saving foto:', err.message);
+        }
+      }
+      socket.emit('sync:fotos:ack', { success: true, saved });
+      console.log(`[${socket.id}] Saved ${saved} new photo(s)`);
     } catch (error) {
-      console.error(`[${socket.id}] Error in sync:photos:`, error);
-      socket.emit('sync:error', {
-        error: error.message || 'Failed to process photos'
-      });
+      console.error(`[${socket.id}] Error in sync:fotos:`, error);
+      socket.emit('sync:error', { error: error.message });
     }
   });
 
-  /**
-   * debug:unsynced
-   * Debug endpoint to check unsynced visits
-   */
   socket.on('debug:unsynced', async (data) => {
     try {
       console.log(`[${socket.id}] debug:unsynced requested`);
@@ -215,6 +227,17 @@ io.on('connection', (socket) => {
   });
 });
 
+// ==================== FRONTEND ESTÁTICO ====================
+
+const distPath = join(__dirname, '../frontend/dist');
+if (existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) return next();
+    res.sendFile(join(distPath, 'index.html'));
+  });
+}
+
 // ==================== ERROR HANDLING ====================
 
 app.use((err, req, res, next) => {
@@ -228,15 +251,19 @@ app.use((err, req, res, next) => {
 // ==================== START SERVER ====================
 
 const PORT = process.env.PORT || 3000;
-httpServer.listen(PORT, () => {
-  console.log(`PILETERO server running on http://localhost:${PORT}`);
-  console.log('Socket.io ready for real-time sync');
-});
+function startServer() {
+  server.listen(PORT, '0.0.0.0', () => {
+    const ifaces = Object.values(networkInterfaces()).flat().filter(i => i.family === 'IPv4' && !i.internal);
+    const localIP = ifaces[0]?.address || 'TU_IP';
+    console.log(`\n✅ PILETERO corriendo en http://localhost:${PORT}`);
+    console.log(`📱 Celular: http://${localIP}:${PORT}\n`);
+  });
+}
 
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\nShutting down gracefully...');
-  httpServer.close(() => {
+  server.close(() => {
     db.close((err) => {
       if (err) console.error('Error closing database:', err);
       else console.log('Database connection closed');
@@ -245,4 +272,4 @@ process.on('SIGINT', () => {
   });
 });
 
-export { app, httpServer, io, db, databaseService, syncService };
+export { app, server, io, db, databaseService, syncService };

@@ -71,8 +71,9 @@ class SyncService {
         return;
       }
 
-      // Create Socket.io connection
-      this.socket = io('http://localhost:3000', {
+      // Connect using same protocol as page (http in dev, https in prod)
+      const serverUrl = `${window.location.protocol}//${window.location.hostname}:3000`;
+      this.socket = io(serverUrl, {
         reconnection: true,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
@@ -89,12 +90,6 @@ class SyncService {
       this.socket.on('disconnect', () => {
         console.log('Socket disconnected');
         this.emit('disconnected');
-      });
-
-      // Socket event: sync data from server
-      this.socket.on('sync:data', (data) => {
-        console.log('Received sync:data from server', data);
-        this.handleSyncData(data);
       });
 
       // Socket event: sync error
@@ -121,6 +116,10 @@ class SyncService {
     try {
       if (data.clientes && Array.isArray(data.clientes)) {
         await storageService.saveAllClientes(data.clientes);
+        // Backup en localStorage para acceso offline confiable
+        try {
+          localStorage.setItem('piletero_clientes_cache', JSON.stringify(data.clientes));
+        } catch {}
         this.emit('clientes_synced', data.clientes);
       }
     } catch (error) {
@@ -130,10 +129,10 @@ class SyncService {
   }
 
   /**
-   * Request a manual sync with the server
-   * Checks if socket is connected, retrieves unsynced visitas from storage,
-   * and sends them to server for synchronization
-   * @returns {Promise<boolean>} True if sync was requested, false if socket not connected
+   * Request a full bidirectional sync with the server:
+   * 1. Ask server for all clients → save to IndexedDB
+   * 2. Send unsynced visits from IndexedDB → server saves to SQLite
+   * @returns {Promise<boolean>} True if sync succeeded
    */
   async requestSync() {
     if (!this.socket || !this.socket.connected) {
@@ -143,24 +142,136 @@ class SyncService {
 
     this.isSyncing = true;
 
-    try {
-      // Get unsynced visitas from local storage
-      const unsynced = await storageService.getUnsynced();
+    return new Promise(async (resolve) => {
+      const timeout = setTimeout(() => {
+        console.warn('Sync timed out');
+        this.isSyncing = false;
+        resolve(false);
+      }, 10000);
 
-      if (unsynced.length > 0) {
-        console.log(`Syncing ${unsynced.length} unsynced visitas`);
-        this.socket.emit('sync:visitas', { visitas: unsynced });
+      try {
+        // Step 1: ask server for clients, wait for response
+        this.socket.once('sync:data', async (data) => {
+          // Rescatar clientes creados offline antes de que handleSyncData los borre
+          let pendingClientes = [];
+          try {
+            await storageService.initPromise;
+            const all = await storageService.getAllClientes();
+            pendingClientes = all.filter(c => c.pendiente_sync);
+          } catch {}
+
+          try {
+            await this.handleSyncData(data);
+          } catch (err) {
+            console.error('Error saving sync data:', err);
+          }
+
+          // Re-guardar los pendientes (handleSyncData los borró con clear)
+          for (const pc of pendingClientes) {
+            await storageService.saveCliente(pc).catch(() => {});
+          }
+
+          // Subir clientes pendientes al servidor
+          if (pendingClientes.length > 0) {
+            console.log(`Uploading ${pendingClientes.length} pending client(s) to server`);
+            this.socket.once('sync:clientes:ack', async () => {
+              // Borrar los temporales (IDs negativos) del IndexedDB
+              for (const pc of pendingClientes) {
+                await storageService.delete('clientes', pc.id).catch(() => {});
+              }
+              console.log('Pending clients synced');
+              // El servidor va a mandar sync:clientes_refreshed con la lista real actualizada
+              this.socket.once('sync:clientes_refreshed', async (freshData) => {
+                if (freshData?.clientes) {
+                  await this.handleSyncData(freshData);
+                  this.emit('clientes_synced', freshData.clientes);
+                  console.log(`Got ${freshData.clientes.length} clients with real IDs`);
+                }
+              });
+            });
+            this.socket.emit('sync:clientes', { clientes: pendingClientes });
+          }
+
+          // Step 2: send ALL visits to server (not just unsynced — server deduplicates by cliente+fecha)
+          // This ensures visits incorrectly marked as synced still reach the server
+          try {
+            const todasVisitas = await storageService.getAllVisitas();
+            if (todasVisitas.length > 0) {
+              console.log(`Uploading ${todasVisitas.length} visit(s) to server`);
+              // Listen for ack first, then send
+              this.socket.once('sync:visitas:ack', async (ack) => {
+                // Mark all visits as synced in IndexedDB
+                for (const v of todasVisitas) {
+                  await storageService.markVisitaSincronizada(v.id).catch(() => {});
+                }
+
+                // Sync photos for each visit the server confirmed
+                const fotosToSync = [];
+                for (const result of (ack.results || [])) {
+                  if (result.action === 'error' || !result.id) continue;
+                  const visita = todasVisitas.find(v => v.id === result.mobileId);
+                  if (!visita) continue;
+                  try {
+                    const fotos = await storageService.getFotosByVisita(visita.id);
+                    for (const f of fotos) {
+                      fotosToSync.push({
+                        visita_id_server: result.id,
+                        tipo: f.tipo || f.type || 'general',
+                        data: f.data,
+                      });
+                    }
+                  } catch {}
+                }
+                if (fotosToSync.length > 0) {
+                  console.log(`Syncing ${fotosToSync.length} photo(s) to server`);
+                  this.socket.emit('sync:fotos', { fotos: fotosToSync });
+                }
+              });
+              this.socket.emit('sync:visitas', { visitas: todasVisitas });
+            }
+          } catch (err) {
+            console.error('Error sending visits:', err);
+          }
+
+          // Step 3: apply queued offline stock adjustments
+          try {
+            const stockQueue = JSON.parse(localStorage.getItem('piletero_q_stock') || '[]');
+            for (const item of stockQueue) {
+              await apiClient.ajustarStock(item.insumo_id, item.delta).catch(() => {});
+            }
+            if (stockQueue.length > 0) {
+              localStorage.removeItem('piletero_q_stock');
+              console.log(`Applied ${stockQueue.length} queued stock adjustment(s)`);
+            }
+          } catch {}
+
+          // Step 4: apply queued offline payments
+          try {
+            const pagoQueue = JSON.parse(localStorage.getItem('piletero_q_pagos') || '[]');
+            for (const item of pagoQueue) {
+              await apiClient.createPago(item).catch(() => {});
+            }
+            if (pagoQueue.length > 0) {
+              localStorage.removeItem('piletero_q_pagos');
+              console.log(`Applied ${pagoQueue.length} queued payment(s)`);
+            }
+          } catch {}
+
+          clearTimeout(timeout);
+          this.isSyncing = false;
+          this.emit('sync_requested');
+          resolve(true);
+        });
+
+        this.socket.emit('sync:request');
+      } catch (error) {
+        console.error('Error requesting sync:', error);
+        clearTimeout(timeout);
+        this.emit('error', error);
+        this.isSyncing = false;
+        resolve(false);
       }
-
-      this.emit('sync_requested');
-      return true;
-    } catch (error) {
-      console.error('Error requesting sync:', error);
-      this.emit('error', error);
-      return false;
-    } finally {
-      this.isSyncing = false;
-    }
+    });
   }
 
   /**
