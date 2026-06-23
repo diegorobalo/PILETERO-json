@@ -379,4 +379,27 @@ router.put('/configuracion', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== GASTOS ENDPOINTS ====================
+
+router.get('/gastos', async (req, res) => {
+  try {
+    res.json(await databaseService.getAllGastos());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/gastos', async (req, res) => {
+  try {
+    const { descripcion, monto } = req.body;
+    if (!descripcion || !monto) return res.status(400).json({ error: 'descripcion y monto requeridos' });
+    res.status(201).json(await databaseService.createGasto(req.body));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/gastos/:id', async (req, res) => {
+  try {
+    await databaseService.deleteGasto(req.params.id);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 export default router;

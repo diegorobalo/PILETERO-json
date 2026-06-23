@@ -416,6 +416,24 @@ class DatabaseService {
     return { clave, valor };
   }
 
+  // ==================== GASTOS ====================
+
+  async createGasto({ descripcion, monto, fecha, categoria }) {
+    const result = await this.execute(
+      'INSERT INTO gastos (descripcion, monto, fecha, categoria) VALUES (?, ?, ?, ?)',
+      [descripcion, monto, fecha || new Date().toISOString().split('T')[0], categoria || 'otros']
+    );
+    return this.queryOne('SELECT * FROM gastos WHERE id = ?', [result.lastID]);
+  }
+
+  async getAllGastos(limit = 500) {
+    return this.query('SELECT * FROM gastos ORDER BY fecha DESC, created_at DESC LIMIT ?', [limit]);
+  }
+
+  async deleteGasto(id) {
+    await this.execute('DELETE FROM gastos WHERE id = ?', [id]);
+  }
+
   // ==================== SYNC ====================
 
   /**

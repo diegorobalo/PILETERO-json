@@ -197,6 +197,18 @@ const apiClient = {
   setConfiguracion(clave, valor) {
     return axiosInstance.put('/configuracion', { clave, valor }).then(r => r.data);
   },
+
+  // ============== GASTOS ENDPOINTS ==============
+
+  getGastos() {
+    return axiosInstance.get('/gastos').then(r => r.data);
+  },
+  createGasto(data) {
+    return axiosInstance.post('/gastos', data).then(r => r.data);
+  },
+  deleteGasto(id) {
+    return axiosInstance.delete(`/gastos/${id}`).then(r => r.data);
+  },
 };
 
 export default axiosInstance;
