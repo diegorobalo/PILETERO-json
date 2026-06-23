@@ -23,6 +23,7 @@ export default function FinancePage() {
   const navigate = useNavigate()
   const [clientes, setClientes] = useState([])
   const [pagos, setPagos] = useState([])
+  const [gastos, setGastos] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('mes')
@@ -33,15 +34,23 @@ export default function FinancePage() {
   const [showAumento, setShowAumento] = useState(false)
   const [pctAumento, setPctAumento] = useState('10')
   const [aplicandoAumento, setAplicandoAumento] = useState(false)
+  const [modalGasto, setModalGasto] = useState(false)
+  const [formGasto, setFormGasto] = useState({ descripcion: '', monto: '', fecha: new Date().toISOString().split('T')[0], categoria: 'productos' })
+  const [guardandoGasto, setGuardandoGasto] = useState(false)
 
   useEffect(() => { cargar() }, [])
 
   async function cargar() {
     try {
       setLoading(true); setError(null)
-      const [cs, ps] = await Promise.all([apiClient.getClientes(), apiClient.getPagos()])
+      const [cs, ps, gs] = await Promise.all([
+        apiClient.getClientes(),
+        apiClient.getPagos(),
+        apiClient.getGastos(),
+      ])
       setClientes(cs)
       setPagos(ps)
+      setGastos(gs)
     } catch { setError('No se pudo conectar al servidor.') }
     finally { setLoading(false) }
   }
@@ -120,6 +129,26 @@ export default function FinancePage() {
     } catch { toastError('No se pudo eliminar el pago') }
   }
 
+  async function registrarGasto() {
+    const monto = parseFloat(formGasto.monto)
+    if (!formGasto.descripcion || !monto || monto <= 0) return toastError('Completá descripción y monto')
+    setGuardandoGasto(true)
+    try {
+      await apiClient.createGasto({ ...formGasto, monto })
+      await cargar()
+      setModalGasto(false)
+      setFormGasto({ descripcion: '', monto: '', fecha: new Date().toISOString().split('T')[0], categoria: 'productos' })
+      toastSuccess('Gasto registrado')
+    } catch { toastError('Error al registrar el gasto') }
+    finally { setGuardandoGasto(false) }
+  }
+
+  async function eliminarGasto(id) {
+    if (!confirm('¿Eliminar este gasto?')) return
+    try { await apiClient.deleteGasto(id); await cargar() }
+    catch { toastError('No se pudo eliminar') }
+  }
+
   const clientesConStatus = clientes.map(c => {
     const pagosMes = pagos.filter(p => p.cliente_id === c.id && p.fecha?.startsWith(mes))
     const totalPagado = pagosMes.reduce((s, p) => s + (p.monto || 0), 0)
@@ -144,14 +173,23 @@ export default function FinancePage() {
               className="text-xs bg-white/20 text-white font-bold px-3 py-2 rounded-xl">
               📈 Aumento
             </button>
+            <button onClick={() => setModalGasto(true)}
+              className="text-xs bg-white/20 text-white font-bold px-3 py-2 rounded-xl">
+              + Gasto
+            </button>
             <input type="month" value={mes} onChange={e => setMes(e.target.value)}
               className="bg-white/20 text-white rounded-xl border-0 px-2 py-2 text-sm focus:outline-none focus:bg-white/30" />
           </div>
         </div>
         <div className="flex gap-1">
-          {[['mes', formatMesLargo(mes)], ['historial', 'Historial']].map(([id, label]) => (
+          {[
+            ['mes', formatMesLargo(mes)],
+            ['gastos', 'Gastos'],
+            ['historial', 'Historial'],
+            ['anio', 'Año'],
+          ].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)}
-              className={`px-4 py-2 rounded-xl font-semibold text-sm transition-colors ${tab === id ? 'bg-white text-sky-700' : 'text-sky-100 hover:bg-white/20'}`}>
+              className={`px-3 py-2 rounded-xl font-semibold text-sm transition-colors ${tab === id ? 'bg-white text-sky-700' : 'text-sky-100 hover:bg-white/20'}`}>
               {label}
             </button>
           ))}
@@ -182,6 +220,25 @@ export default function FinancePage() {
                 <p className="text-xs text-red-300 mt-0.5">{conPrecio.filter(c => c.deuda > 0).length} deben</p>
               </div>
             </div>
+
+            {(() => {
+              const gastosMes = gastos.filter(g => g.fecha?.startsWith(mes))
+              const totalGastosMes = gastosMes.reduce((s, g) => s + (g.monto || 0), 0)
+              const ganancia = totalCobrado - totalGastosMes
+              return (
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <div className="bg-white rounded-xl shadow-sm border border-orange-100 p-3">
+                    <p className="text-xs text-orange-400 uppercase tracking-wide mb-1">Gastado</p>
+                    <p className="text-base font-black text-orange-600">${totalGastosMes.toLocaleString('es-AR')}</p>
+                    <p className="text-xs text-orange-300 mt-0.5">{gastosMes.length} gasto(s)</p>
+                  </div>
+                  <div className={`bg-white rounded-xl shadow-sm p-3 border ${ganancia >= 0 ? 'border-green-100' : 'border-red-100'}`}>
+                    <p className={`text-xs uppercase tracking-wide mb-1 ${ganancia >= 0 ? 'text-green-500' : 'text-red-400'}`}>Ganancia neta</p>
+                    <p className={`text-base font-black ${ganancia >= 0 ? 'text-green-700' : 'text-red-600'}`}>${ganancia.toLocaleString('es-AR')}</p>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Lista de clientes */}
             <div className="space-y-2">
@@ -254,6 +311,85 @@ export default function FinancePage() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {!loading && tab === 'gastos' && (
+          <div>
+            <p className="text-sm text-gray-500 mb-4">
+              {gastos.filter(g => g.fecha?.startsWith(mes)).length} gasto(s) · {formatMesLargo(mes)}
+            </p>
+            {gastos.filter(g => g.fecha?.startsWith(mes)).length === 0 ? (
+              <p className="text-gray-400">No hay gastos registrados en este período.</p>
+            ) : (
+              <div className="space-y-2">
+                {gastos.filter(g => g.fecha?.startsWith(mes)).map(g => (
+                  <div key={g.id} className="bg-white rounded-xl shadow-sm border-l-4 border-l-orange-400 p-4 flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-gray-900">{g.descripcion}</p>
+                      <p className="text-sm text-gray-500">{formatFecha(g.fecha)} · {g.categoria}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <p className="text-xl font-black text-orange-600">${(g.monto || 0).toLocaleString('es-AR')}</p>
+                      <button onClick={() => eliminarGasto(g.id)}
+                        className="px-3 py-1.5 bg-red-50 text-red-500 rounded text-sm font-medium hover:bg-red-100">✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loading && tab === 'anio' && (
+          <div>
+            <p className="text-sm text-gray-500 mb-4">Resumen {mes.split('-')[0]}</p>
+            {(() => {
+              const anio = mes.split('-')[0]
+              const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+              const filas = meses.map((label, i) => {
+                const key = `${anio}-${String(i+1).padStart(2,'0')}`
+                const cobrado = pagos.filter(p => p.fecha?.startsWith(key)).reduce((s,p) => s+(p.monto||0), 0)
+                const gastado = gastos.filter(g => g.fecha?.startsWith(key)).reduce((s,g) => s+(g.monto||0), 0)
+                return { label, cobrado, gastado, ganancia: cobrado - gastado }
+              })
+              const totalAnio = filas.reduce((s,f) => s + f.cobrado, 0)
+              const gastoAnio = filas.reduce((s,f) => s + f.gastado, 0)
+              return (
+                <div>
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    <div className="bg-white rounded-xl shadow-sm border border-green-100 p-3 text-center">
+                      <p className="text-xs text-green-500 uppercase mb-1">Cobrado</p>
+                      <p className="text-sm font-black text-green-700">${totalAnio.toLocaleString('es-AR')}</p>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm border border-orange-100 p-3 text-center">
+                      <p className="text-xs text-orange-400 uppercase mb-1">Gastado</p>
+                      <p className="text-sm font-black text-orange-600">${gastoAnio.toLocaleString('es-AR')}</p>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm p-3 text-center">
+                      <p className="text-xs text-gray-400 uppercase mb-1">Neto</p>
+                      <p className={`text-sm font-black ${totalAnio-gastoAnio >= 0 ? 'text-green-700' : 'text-red-600'}`}>${(totalAnio-gastoAnio).toLocaleString('es-AR')}</p>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                    {filas.map((f,i) => (
+                      <div key={i} className={`flex items-center px-4 py-3 gap-4 ${i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
+                        <span className="w-8 text-sm font-bold text-gray-500">{f.label}</span>
+                        <div className="flex-1">
+                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-2 bg-green-400 rounded-full" style={{ width: `${totalAnio > 0 ? Math.min(100, (f.cobrado/totalAnio)*100*12) : 0}%` }} />
+                          </div>
+                        </div>
+                        <span className="text-sm font-bold text-green-700 w-24 text-right">${f.cobrado.toLocaleString('es-AR')}</span>
+                        <span className={`text-xs w-20 text-right ${f.ganancia >= 0 ? 'text-gray-400' : 'text-red-500'}`}>
+                          {f.cobrado > 0 || f.gastado > 0 ? `neto $${f.ganancia.toLocaleString('es-AR')}` : '—'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
       </div>
@@ -344,6 +480,59 @@ export default function FinancePage() {
                 {guardando ? 'Guardando...' : '✓ Confirmar pago'}
               </button>
               <button onClick={() => setModalCliente(null)}
+                className="px-5 bg-gray-200 text-gray-700 font-bold py-3 rounded">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de nuevo gasto */}
+      {modalGasto && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-5">Registrar gasto</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descripción *</label>
+                <input type="text" value={formGasto.descripcion}
+                  onChange={e => setFormGasto(f => ({ ...f, descripcion: e.target.value }))}
+                  placeholder="Ej: Cloro granulado 25kg"
+                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-orange-400"
+                  autoFocus />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Monto ($) *</label>
+                <input type="number" value={formGasto.monto}
+                  onChange={e => setFormGasto(f => ({ ...f, monto: e.target.value }))}
+                  placeholder="Ej: 8500"
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-xl font-bold focus:outline-none focus:border-orange-400" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+                <select value={formGasto.categoria}
+                  onChange={e => setFormGasto(f => ({ ...f, categoria: e.target.value }))}
+                  className="w-full border border-gray-300 rounded px-3 py-2">
+                  <option value="productos">Productos químicos</option>
+                  <option value="combustible">Combustible</option>
+                  <option value="herramientas">Herramientas</option>
+                  <option value="otros">Otros</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
+                <input type="date" value={formGasto.fecha}
+                  onChange={e => setFormGasto(f => ({ ...f, fecha: e.target.value }))}
+                  className="w-full border border-gray-300 rounded px-3 py-2" />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={registrarGasto} disabled={guardandoGasto}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded disabled:opacity-50">
+                {guardandoGasto ? 'Guardando...' : '✓ Registrar gasto'}
+              </button>
+              <button onClick={() => setModalGasto(false)}
                 className="px-5 bg-gray-200 text-gray-700 font-bold py-3 rounded">
                 Cancelar
               </button>
