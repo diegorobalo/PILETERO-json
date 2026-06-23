@@ -46,7 +46,7 @@ export default function ReciboPagoPage() {
   const [tecnico, setTecnico] = useState({ nombre_tecnico: 'Federico Tenca', telefono: '2323 545583' })
 
   useEffect(() => {
-    apiClient.getConfiguracion().then(c => { if (c.nombre_tecnico) setTecnico(c) }).catch(() => {})
+    apiClient.getConfiguracion().then(c => { if (c.nombre_tecnico) setTecnico(t => ({ ...t, ...c })) }).catch(() => {})
   }, [])
 
   if (!pago) {
