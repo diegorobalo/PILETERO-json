@@ -46,6 +46,12 @@ const MIGRATIONS = [
   "ALTER TABLE clientes ADD COLUMN grupo_semana TEXT DEFAULT 'A'",
   "CREATE TABLE IF NOT EXISTS fotos_clientes (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente_id INTEGER NOT NULL, tipo TEXT, ruta_archivo TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE)",
   "CREATE INDEX IF NOT EXISTS idx_fotos_clientes_cliente_id ON fotos_clientes(cliente_id)",
+  // NUEVAS v1.1:
+  "CREATE TABLE IF NOT EXISTS configuracion (clave TEXT PRIMARY KEY, valor TEXT)",
+  "CREATE TABLE IF NOT EXISTS gastos (id INTEGER PRIMARY KEY AUTOINCREMENT, descripcion TEXT NOT NULL, monto REAL NOT NULL, fecha DATE NOT NULL, categoria TEXT DEFAULT 'otros', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE TABLE IF NOT EXISTS movimientos_inventario (id INTEGER PRIMARY KEY AUTOINCREMENT, insumo_id INTEGER NOT NULL, tipo TEXT NOT NULL, cantidad REAL NOT NULL, origen TEXT DEFAULT 'manual', referencia_id INTEGER, fecha DATE NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (insumo_id) REFERENCES inventario(id) ON DELETE CASCADE)",
+  "CREATE INDEX IF NOT EXISTS idx_movimientos_insumo_id ON movimientos_inventario(insumo_id)",
+  "CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha)",
 ];
 
 db.exec(schema, (err) => {
@@ -56,18 +62,20 @@ db.exec(schema, (err) => {
   console.log('Database schema OK');
 
   let pending = MIGRATIONS.length;
-  MIGRATIONS.forEach(sql => {
-    db.run(sql, (migErr) => {
-      if (migErr && !migErr.message.includes('duplicate column')) {
-        console.error('Migration warning:', migErr.message);
-      }
-      pending--;
-      if (pending === 0) {
-        console.log('Migrations OK — starting server');
-        databaseService.init(db);
-        syncService.init();
-        startServer();
-      }
+  db.serialize(() => {
+    MIGRATIONS.forEach(sql => {
+      db.run(sql, (migErr) => {
+        if (migErr && !migErr.message.includes('duplicate column')) {
+          console.error('Migration warning:', migErr.message);
+        }
+        pending--;
+        if (pending === 0) {
+          console.log('Migrations OK — starting server');
+          databaseService.init(db);
+          syncService.init();
+          startServer();
+        }
+      });
     });
   });
 });
