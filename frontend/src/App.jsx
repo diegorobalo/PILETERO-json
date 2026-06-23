@@ -17,6 +17,7 @@ import InventarioPage from './pages/InventarioPage'
 import VisitasPage from './pages/VisitasPage'
 import ReporteVisitaPage from './pages/ReporteVisitaPage'
 import ReciboPagoPage from './pages/ReciboPagoPage'
+import ConfiguracionPage from './pages/ConfiguracionPage'
 
 /**
  * App - Main application component with conditional routing based on device type
@@ -61,6 +62,7 @@ function App() {
               <Route path="/inventario" element={<InventarioPage />} />
               <Route path="/reporte" element={<ReporteVisitaPage />} />
               <Route path="/recibo" element={<ReciboPagoPage />} />
+              <Route path="/configuracion" element={<ConfiguracionPage />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </>

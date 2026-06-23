@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { apiClient } from '../services/api'
 
 function formatFechaLarga(dateStr) {
   if (!dateStr) return ''
@@ -18,7 +19,7 @@ function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1)
 }
 
-function buildWhatsAppText(pago, cliente) {
+function buildWhatsAppText(pago, cliente, tecnico) {
   return `🏊 *RECIBO DE PAGO - PILETERO*
 ================
 *Cliente:* ${pago.cliente_nombre || cliente?.nombre || ''}
@@ -33,8 +34,8 @@ function buildWhatsAppText(pago, cliente) {
 ✅ *PAGADO*
 Recibo N° ${String(pago.id || '').padStart(4, '0')}
 
-— *Federico Tenca* · Mantenimiento de piscinas
-📞 2323 545583`
+— *${tecnico.nombre_tecnico}* · Mantenimiento de piscinas
+📞 ${tecnico.telefono}`
 }
 
 export default function ReciboPagoPage() {
@@ -42,6 +43,11 @@ export default function ReciboPagoPage() {
   const navigate = useNavigate()
   const { pago, cliente } = location.state || {}
   const [generandoPDF, setGenerandoPDF] = useState(false)
+  const [tecnico, setTecnico] = useState({ nombre_tecnico: 'Federico Tenca', telefono: '2323 545583' })
+
+  useEffect(() => {
+    apiClient.getConfiguracion().then(c => { if (c.nombre_tecnico) setTecnico(c) }).catch(() => {})
+  }, [])
 
   if (!pago) {
     return (
@@ -54,7 +60,7 @@ export default function ReciboPagoPage() {
     )
   }
 
-  const whatsappText = buildWhatsAppText(pago, cliente)
+  const whatsappText = buildWhatsAppText(pago, cliente, tecnico)
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`
   const reciboNum = String(pago.id || '').padStart(4, '0')
 
@@ -158,8 +164,8 @@ export default function ReciboPagoPage() {
 
         {/* Footer */}
         <div className="border-t border-gray-200 pt-4 text-center text-xs text-gray-500">
-          <p className="font-semibold text-gray-700">Federico Tenca</p>
-          <p>Mantenimiento de piscinas · 2323 545583</p>
+          <p className="font-semibold text-gray-700">{tecnico.nombre_tecnico}</p>
+          <p>Mantenimiento de piscinas · {tecnico.telefono}</p>
           <p className="text-gray-400 mt-1">Generado por PILETERO · {new Date().toLocaleDateString('es-AR')}</p>
         </div>
       </div>

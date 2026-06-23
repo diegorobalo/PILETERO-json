@@ -34,6 +34,7 @@ function Navigation() {
             ['/visitas',    '🗓️', 'Visitas'],
             ['/finance',    '💰', 'Finanzas'],
             ['/inventario', '📦', 'Inventario'],
+            ['/configuracion', '⚙️', 'Config'],
           ].map(([path, icon, label]) => (
             <button key={path} onClick={() => navigate(path)}
               className={`w-full text-left px-3 py-2.5 rounded-xl font-medium transition-colors flex items-center gap-3 ${

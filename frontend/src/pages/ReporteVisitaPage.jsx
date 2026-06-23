@@ -29,7 +29,7 @@ function formatFechaLarga(dateStr) {
   return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-function buildWhatsAppText(visita, tareas, quim, fotos) {
+function buildWhatsAppText(visita, tareas, quim, fotos, tecnico) {
   const q = quim || {}
   const quimLineas = [
     q.cloroGranulado ? `• Cloro granulado: ${q.cloroGranulado}g` : '',
@@ -63,8 +63,8 @@ ${quimLineas || '• Sin registro'}
 ${visita.observaciones || 'Sin observaciones'}
 
 ${fotos.length > 0 ? `📷 ${fotos.length} foto(s) adjunta(s)` : ''}
-— *Federico Tenca* · Mantenimiento de piscinas
-📞 2323 545583`
+— *${tecnico.nombre_tecnico}* · Mantenimiento de piscinas
+📞 ${tecnico.telefono}`
 }
 
 export default function ReporteVisitaPage() {
@@ -75,6 +75,11 @@ export default function ReporteVisitaPage() {
   const [fotos, setFotos] = useState(fotosState || [])
   const [loadingFotos, setLoadingFotos] = useState(false)
   const [generandoPDF, setGenerandoPDF] = useState(false)
+  const [tecnico, setTecnico] = useState({ nombre_tecnico: 'Federico Tenca', telefono: '2323 545583' })
+
+  useEffect(() => {
+    apiClient.getConfiguracion().then(c => { if (c.nombre_tecnico) setTecnico(c) }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!visita || fotos.length > 0 || !visita.id) return
@@ -110,7 +115,7 @@ export default function ReporteVisitaPage() {
 
   const tareas = parseTareas(visita.tareas_realizadas)
   const quim = parseQuimicos(visita.quimicos_usados)
-  const whatsappText = buildWhatsAppText(visita, tareas, quim, fotos)
+  const whatsappText = buildWhatsAppText(visita, tareas, quim, fotos, tecnico)
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`
 
   async function compartirWA() {
@@ -295,8 +300,8 @@ export default function ReporteVisitaPage() {
 
         {/* Footer */}
         <div className="border-t border-gray-200 pt-4 mt-6 text-center text-xs text-gray-500">
-          <p className="font-semibold text-gray-700">Federico Tenca</p>
-          <p>Mantenimiento de piscinas · 2323 545583</p>
+          <p className="font-semibold text-gray-700">{tecnico.nombre_tecnico}</p>
+          <p>Mantenimiento de piscinas · {tecnico.telefono}</p>
           <p className="text-gray-400 mt-1">Generado por PILETERO · {new Date().toLocaleDateString('es-AR')}</p>
         </div>
       </div>

@@ -188,6 +188,15 @@ const apiClient = {
   deletePago(id) {
     return axiosInstance.delete(`/pagos/${id}`).then((r) => r.data);
   },
+
+  // ============== CONFIGURACION ENDPOINTS ==============
+
+  getConfiguracion() {
+    return axiosInstance.get('/configuracion').then(r => r.data);
+  },
+  setConfiguracion(clave, valor) {
+    return axiosInstance.put('/configuracion', { clave, valor }).then(r => r.data);
+  },
 };
 
 export default axiosInstance;
