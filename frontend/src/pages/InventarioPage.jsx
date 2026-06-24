@@ -37,6 +37,7 @@ export default function InventarioPage() {
   const [editando, setEditando] = useState(null)
   const [ajuste, setAjuste] = useState({ id: null, tipo: null, cantidad: '' })
   const [form, setForm] = useState({ nombre: '', unidad: 'g', stock_actual: '', stock_minimo: '', precio_unitario: '' })
+  const [historialModal, setHistorialModal] = useState(null) // { insumo, movimientos }
 
   useEffect(() => { cargar() }, [])
 
@@ -93,6 +94,13 @@ export default function InventarioPage() {
       setAjuste({ id: null, tipo: null, cantidad: '' })
       await cargar()
     } catch (e) { alert('Error: ' + e.message) }
+  }
+
+  async function verHistorial(insumo) {
+    try {
+      const movs = await apiClient.getMovimientosInsumo(insumo.id)
+      setHistorialModal({ insumo, movimientos: movs })
+    } catch { alert('No se pudo cargar el historial') }
   }
 
   const alertas = insumos.filter(i => i.stock_actual < i.stock_minimo)
@@ -214,6 +222,7 @@ export default function InventarioPage() {
                           <button onClick={() => setAjuste({ id: ins.id, tipo: 'consumir', cantidad: '' })} className="px-3 py-1 bg-orange-100 text-orange-700 rounded font-medium text-sm hover:bg-orange-200">− Usé</button>
                           <button onClick={() => abrirEditar(ins)} className="px-3 py-1 bg-blue-100 text-blue-700 rounded font-medium text-sm hover:bg-blue-200">Editar</button>
                           <button onClick={() => eliminar(ins.id, ins.nombre)} className="px-3 py-1 bg-red-100 text-red-700 rounded font-medium text-sm hover:bg-red-200">Borrar</button>
+                          <button onClick={() => verHistorial(ins)} className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200">Historial</button>
                         </div>
                       </td>
                     </tr>
@@ -223,6 +232,39 @@ export default function InventarioPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Modal historial de movimientos */}
+      {historialModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Historial — {historialModal.insumo.nombre}</h2>
+              <button onClick={() => setHistorialModal(null)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+            {historialModal.movimientos.length === 0 ? (
+              <p className="text-gray-400 text-sm">Sin movimientos registrados.</p>
+            ) : (
+              <div className="overflow-y-auto space-y-2">
+                {historialModal.movimientos.map(m => (
+                  <div key={m.id} className="flex items-center justify-between py-2 border-b border-gray-100">
+                    <div>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full mr-2 ${
+                        m.tipo === 'compra' ? 'bg-green-100 text-green-700' :
+                        m.tipo === 'uso' ? 'bg-orange-100 text-orange-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>{m.tipo}</span>
+                      <span className="text-sm text-gray-500">{m.fecha} · {m.origen}</span>
+                    </div>
+                    <span className={`text-sm font-bold ${m.cantidad > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {m.cantidad > 0 ? '+' : ''}{m.cantidad} {historialModal.insumo.unidad}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )
