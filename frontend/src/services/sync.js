@@ -18,6 +18,7 @@ class SyncService {
     this.isConnecting = false;
     this.isSyncing = false;
     this.listeners = [];
+    this._isDrainingQueues = false;
   }
 
   /**
@@ -45,6 +46,52 @@ class SyncService {
         console.error(`Error in listener for ${event}:`, error);
       }
     });
+  }
+
+  /**
+   * Drain queued offline pagos and stock adjustments to the server.
+   * Shared by the socket 'connect' handler (auto-sync on reconnect) and
+   * requestSync() (manual "Sincronizar" button) so the same localStorage
+   * queues are never drained twice concurrently.
+   *
+   * Re-entrancy guard: if a drain is already in progress, this is a no-op.
+   * This prevents duplicate server writes (double payments, double stock
+   * adjustments) if both triggers fire close together.
+   * @returns {Promise<void>}
+   */
+  async _drainOfflineQueues() {
+    if (this._isDrainingQueues) {
+      return;
+    }
+    this._isDrainingQueues = true;
+
+    try {
+      // Drenar cola de pagos offline
+      try {
+        const pagoQueue = JSON.parse(localStorage.getItem('piletero_q_pagos') || '[]');
+        if (pagoQueue.length > 0) {
+          console.log(`[auto-sync] Drenando ${pagoQueue.length} pago(s) offline`);
+          for (const item of pagoQueue) {
+            await apiClient.createPago(item).catch(e => console.warn('[auto-sync] pago failed:', e.message));
+          }
+          localStorage.removeItem('piletero_q_pagos');
+        }
+      } catch {}
+
+      // Drenar cola de stock offline
+      try {
+        const stockQueue = JSON.parse(localStorage.getItem('piletero_q_stock') || '[]');
+        if (stockQueue.length > 0) {
+          console.log(`[auto-sync] Drenando ${stockQueue.length} ajuste(s) de stock offline`);
+          for (const item of stockQueue) {
+            await apiClient.ajustarStock(item.insumo_id, item.delta).catch(e => console.warn('[auto-sync] stock failed:', e.message));
+          }
+          localStorage.removeItem('piletero_q_stock');
+        }
+      } catch {}
+    } finally {
+      this._isDrainingQueues = false;
+    }
   }
 
   /**
@@ -85,29 +132,7 @@ class SyncService {
         console.log('Socket connected');
         this.emit('connected');
 
-        // Drenar cola de pagos offline
-        try {
-          const pagoQueue = JSON.parse(localStorage.getItem('piletero_q_pagos') || '[]');
-          if (pagoQueue.length > 0) {
-            console.log(`[auto-sync] Drenando ${pagoQueue.length} pago(s) offline`);
-            for (const item of pagoQueue) {
-              await apiClient.createPago(item).catch(e => console.warn('[auto-sync] pago failed:', e.message));
-            }
-            localStorage.removeItem('piletero_q_pagos');
-          }
-        } catch {}
-
-        // Drenar cola de stock offline
-        try {
-          const stockQueue = JSON.parse(localStorage.getItem('piletero_q_stock') || '[]');
-          if (stockQueue.length > 0) {
-            console.log(`[auto-sync] Drenando ${stockQueue.length} ajuste(s) de stock offline`);
-            for (const item of stockQueue) {
-              await apiClient.ajustarStock(item.insumo_id, item.delta).catch(e => console.warn('[auto-sync] stock failed:', e.message));
-            }
-            localStorage.removeItem('piletero_q_stock');
-          }
-        } catch {}
+        await this._drainOfflineQueues();
       });
 
       // Socket event: disconnected
@@ -257,29 +282,10 @@ class SyncService {
             console.error('Error sending visits:', err);
           }
 
-          // Step 3: apply queued offline stock adjustments
-          try {
-            const stockQueue = JSON.parse(localStorage.getItem('piletero_q_stock') || '[]');
-            for (const item of stockQueue) {
-              await apiClient.ajustarStock(item.insumo_id, item.delta).catch(() => {});
-            }
-            if (stockQueue.length > 0) {
-              localStorage.removeItem('piletero_q_stock');
-              console.log(`Applied ${stockQueue.length} queued stock adjustment(s)`);
-            }
-          } catch {}
-
-          // Step 4: apply queued offline payments
-          try {
-            const pagoQueue = JSON.parse(localStorage.getItem('piletero_q_pagos') || '[]');
-            for (const item of pagoQueue) {
-              await apiClient.createPago(item).catch(() => {});
-            }
-            if (pagoQueue.length > 0) {
-              localStorage.removeItem('piletero_q_pagos');
-              console.log(`Applied ${pagoQueue.length} queued payment(s)`);
-            }
-          } catch {}
+          // Step 3 & 4: apply queued offline stock adjustments and payments
+          // (shared with the socket 'connect' handler; no-ops if a drain is
+          // already in progress, preventing duplicate server writes)
+          await this._drainOfflineQueues();
 
           clearTimeout(timeout);
           this.isSyncing = false;
