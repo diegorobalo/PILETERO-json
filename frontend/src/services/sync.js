@@ -81,9 +81,33 @@ class SyncService {
       });
 
       // Socket event: connected
-      this.socket.on('connect', () => {
+      this.socket.on('connect', async () => {
         console.log('Socket connected');
         this.emit('connected');
+
+        // Drenar cola de pagos offline
+        try {
+          const pagoQueue = JSON.parse(localStorage.getItem('piletero_q_pagos') || '[]');
+          if (pagoQueue.length > 0) {
+            console.log(`[auto-sync] Drenando ${pagoQueue.length} pago(s) offline`);
+            for (const item of pagoQueue) {
+              await apiClient.createPago(item).catch(e => console.warn('[auto-sync] pago failed:', e.message));
+            }
+            localStorage.removeItem('piletero_q_pagos');
+          }
+        } catch {}
+
+        // Drenar cola de stock offline
+        try {
+          const stockQueue = JSON.parse(localStorage.getItem('piletero_q_stock') || '[]');
+          if (stockQueue.length > 0) {
+            console.log(`[auto-sync] Drenando ${stockQueue.length} ajuste(s) de stock offline`);
+            for (const item of stockQueue) {
+              await apiClient.ajustarStock(item.insumo_id, item.delta).catch(e => console.warn('[auto-sync] stock failed:', e.message));
+            }
+            localStorage.removeItem('piletero_q_stock');
+          }
+        } catch {}
       });
 
       // Socket event: disconnected
