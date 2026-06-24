@@ -48,6 +48,43 @@ function clienteEsDeHoy(cliente) {
   return true;
 }
 
+function clienteEsDeDate(cliente, dateStr) {
+  const { dias_visita, frecuencia_visita, grupo_semana } = cliente;
+  if (!dias_visita) return false;
+
+  const d = new Date(dateStr + 'T00:00:00');
+  const diaSemana = d.getDay();
+  let diaOk = false;
+  try {
+    const arr = JSON.parse(dias_visita);
+    if (Array.isArray(arr)) diaOk = arr.map(Number).includes(diaSemana);
+  } catch {}
+  if (!diaOk) {
+    const variantes = DIAS[diaSemana] || [];
+    diaOk = variantes.some((v) => dias_visita.toLowerCase().includes(v));
+  }
+  if (!diaOk) return false;
+
+  if (frecuencia_visita === 'quincenal') {
+    const semana = getISOWeek(d);
+    const grupoActual = semana % 2 === 0 ? 'A' : 'B';
+    return (grupo_semana || 'A') === grupoActual;
+  }
+
+  return true;
+}
+
+function getDiasSemana() {
+  const hoy = new Date();
+  const lunes = new Date(hoy);
+  lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7)); // Lunes de esta semana
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(lunes);
+    d.setDate(lunes.getDate() + i);
+    return d.toISOString().split('T')[0];
+  });
+}
+
 function getTodayDate() {
   return new Date().toISOString().split('T')[0];
 }
@@ -76,6 +113,7 @@ export default function AgendaPage() {
   const [saltados, setSaltados] = useState({}); // { clienteId: motivo }
   const [modalSaltar, setModalSaltar] = useState(null); // clienteId
   const [motivoSaltar, setMotivoSaltar] = useState('cliente_ausente');
+  const [vistaMode, setVistaMode] = useState('hoy'); // 'hoy' | 'semana'
 
   async function cargarDatos() {
     try {
@@ -301,7 +339,13 @@ export default function AgendaPage() {
             <span className={isSyncing ? 'animate-spin inline-block' : ''}>⟳</span>
             {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
           </button>
-          {clientesDeHoy.length > 0 && (
+          <button
+            onClick={() => setVistaMode((v) => (v === 'hoy' ? 'semana' : 'hoy'))}
+            className="px-3 py-2 bg-white/20 text-white text-sm font-semibold rounded-xl whitespace-nowrap"
+          >
+            {vistaMode === 'hoy' ? '📅 Semana' : '📍 Hoy'}
+          </button>
+          {vistaMode === 'hoy' && clientesDeHoy.length > 0 && (
             <button
               onClick={() => setMostrarSelector(!mostrarSelector)}
               className="p-3 rounded-xl font-semibold text-white bg-white/20 active:bg-white/30 whitespace-nowrap text-sm"
@@ -312,7 +356,8 @@ export default function AgendaPage() {
         </div>
       </div>
 
-      <div className="p-4">
+      {vistaMode === 'hoy' && (
+        <div className="p-4">
         {/* Selector para agregar clientes */}
         {mostrarSelector && clientesNoEnAgenda.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
@@ -424,6 +469,41 @@ export default function AgendaPage() {
           </div>
         )}
       </div>
+      )}
+
+      {vistaMode === 'semana' && (
+        <div className="p-4 space-y-3">
+          {getDiasSemana().map((dateStr) => {
+            const clientesDia = todosClientes.filter((c) => clienteEsDeDate(c, dateStr));
+            const esHoy = dateStr === fecha;
+            const d = new Date(dateStr + 'T00:00:00');
+            const label = d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+            return (
+              <div key={dateStr} className={`bg-white rounded-xl shadow-sm overflow-hidden ${esHoy ? 'ring-2 ring-sky-500' : ''}`}>
+                <div className={`px-4 py-2 flex items-center justify-between ${esHoy ? 'bg-sky-600 text-white' : 'bg-gray-50 text-gray-700'}`}>
+                  <span className="font-semibold text-sm capitalize">{label}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${esHoy ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                    {clientesDia.length} cliente{clientesDia.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                {clientesDia.length > 0 && (
+                  <div className="divide-y divide-gray-50">
+                    {clientesDia.map((c) => (
+                      <div key={c.id} className="px-4 py-2 text-sm text-gray-700 flex items-center justify-between">
+                        <span className="font-medium">{c.nombre}</span>
+                        <span className="text-gray-400 text-xs">{c.direccion}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {clientesDia.length === 0 && (
+                  <p className="px-4 py-2 text-sm text-gray-400">Sin visitas programadas</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Modal de motivo para saltar */}
       {modalSaltar && (
