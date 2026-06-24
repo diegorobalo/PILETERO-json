@@ -1,3 +1,4 @@
+import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useState, useEffect } from 'react'
 import { apiClient } from '../services/api'
 import ClientForm from '../components/ClientForm'
@@ -8,6 +9,9 @@ export default function ClientsPage() {
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [panelCliente, setPanelCliente] = useState(null) // { cliente, visitas }
+  const [panelTab, setPanelTab] = useState('visitas') // 'visitas' | 'agua'
+  const [loadingPanel, setLoadingPanel] = useState(false)
 
   useEffect(() => {
     loadClientes()
@@ -61,6 +65,19 @@ export default function ClientsPage() {
   const handleCancel = () => {
     setShowForm(false)
     setEditingId(null)
+  }
+
+  async function abrirPanel(cliente) {
+    setLoadingPanel(true)
+    setPanelTab('visitas')
+    try {
+      const visitas = await apiClient.getVisitasByCliente(cliente.id)
+      setPanelCliente({ cliente, visitas })
+    } catch {
+      alert('No se pudo cargar el historial')
+    } finally {
+      setLoadingPanel(false)
+    }
   }
 
   const initialData = editingId
@@ -133,6 +150,12 @@ export default function ClientsPage() {
                     </td>
                     <td className="px-6 py-4">
                       <button
+                        onClick={() => abrirPanel(cliente)}
+                        className="px-2 py-1 text-xs bg-sky-50 text-sky-700 rounded hover:bg-sky-100 mr-4"
+                      >
+                        Historial
+                      </button>
+                      <button
                         onClick={() => handleEditCliente(cliente)}
                         className="text-blue-600 hover:underline mr-4"
                       >
@@ -150,6 +173,101 @@ export default function ClientsPage() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {loadingPanel && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg px-6 py-4 text-gray-600">Cargando historial...</div>
+        </div>
+      )}
+
+      {panelCliente && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-end" onClick={() => setPanelCliente(null)}>
+          <div className="bg-white w-full max-w-lg h-full overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">{panelCliente.cliente.nombre}</h2>
+                <p className="text-sm text-gray-500">{panelCliente.cliente.direccion}</p>
+              </div>
+              <button onClick={() => setPanelCliente(null)} className="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
+            </div>
+
+            <div className="flex border-b border-gray-100">
+              {[['visitas', 'Visitas'], ['agua', 'Agua']].map(([id, label]) => (
+                <button key={id} onClick={() => setPanelTab(id)}
+                  className={`flex-1 py-3 text-sm font-semibold transition-colors ${panelTab === id ? 'text-sky-700 border-b-2 border-sky-600' : 'text-gray-500'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="p-6">
+              {panelTab === 'visitas' && (
+                <div className="space-y-3">
+                  {panelCliente.visitas.length === 0 ? (
+                    <p className="text-gray-400">Sin visitas registradas.</p>
+                  ) : panelCliente.visitas.slice(0, 20).map(v => (
+                    <div key={v.id} className="border border-gray-100 rounded-xl p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <p className="font-bold text-gray-800 text-sm">
+                          {new Date(v.fecha + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                        <div className="flex gap-2 text-xs">
+                          {v.cloro_ppm && <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">Cl {v.cloro_ppm} ppm</span>}
+                          {v.ph && <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded-full">pH {v.ph}</span>}
+                        </div>
+                      </div>
+                      {v.observaciones && <p className="text-sm text-gray-600">{v.observaciones}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {panelTab === 'agua' && (
+                <div>
+                  {(() => {
+                    const datos = panelCliente.visitas
+                      .filter(v => v.cloro_ppm || v.ph)
+                      .slice(0, 20)
+                      .reverse()
+                      .map(v => ({
+                        fecha: v.fecha?.slice(5), // MM-DD
+                        cloro: v.cloro_ppm ? parseFloat(v.cloro_ppm) : null,
+                        ph: v.ph ? parseFloat(v.ph) : null,
+                      }))
+                    if (datos.length < 2) return <p className="text-gray-400 text-sm">Se necesitan al menos 2 visitas con mediciones para mostrar el gráfico.</p>
+                    return (
+                      <div>
+                        <p className="text-sm text-gray-500 mb-4">Últimas {datos.length} mediciones</p>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <LineChart data={datos}>
+                            <XAxis dataKey="fecha" tick={{ fontSize: 11 }} />
+                            <YAxis yAxisId="cloro" domain={[0, 5]} tick={{ fontSize: 11 }} />
+                            <YAxis yAxisId="ph" orientation="right" domain={[6, 9]} tick={{ fontSize: 11 }} />
+                            <Tooltip />
+                            <Legend />
+                            <Line yAxisId="cloro" type="monotone" dataKey="cloro" stroke="#0284c7" name="Cloro (ppm)" dot={{ r: 3 }} connectNulls />
+                            <Line yAxisId="ph" type="monotone" dataKey="ph" stroke="#16a34a" name="pH" dot={{ r: 3 }} connectNulls />
+                          </LineChart>
+                        </ResponsiveContainer>
+                        <div className="mt-4 grid grid-cols-2 gap-3">
+                          <div className="bg-blue-50 rounded-lg p-3 text-center">
+                            <p className="text-xs text-blue-500 mb-1">Cloro ideal</p>
+                            <p className="text-sm font-bold text-blue-700">1.0 – 3.0 ppm</p>
+                          </div>
+                          <div className="bg-green-50 rounded-lg p-3 text-center">
+                            <p className="text-xs text-green-500 mb-1">pH ideal</p>
+                            <p className="text-sm font-bold text-green-700">7.2 – 7.6</p>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
