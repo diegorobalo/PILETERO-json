@@ -73,6 +73,9 @@ export default function AgendaPage() {
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [mostrarSelector, setMostrarSelector] = useState(false);
+  const [saltados, setSaltados] = useState({}); // { clienteId: motivo }
+  const [modalSaltar, setModalSaltar] = useState(null); // clienteId
+  const [motivoSaltar, setMotivoSaltar] = useState('cliente_ausente');
 
   async function cargarDatos() {
     try {
@@ -101,9 +104,12 @@ export default function AgendaPage() {
       // Restaurar overrides manuales del día (guardados en localStorage)
       const stored = localStorage.getItem(`agenda_${fecha}`);
       if (stored) {
-        const { agregados = [], removidos = [] } = JSON.parse(stored);
+        const { agregados = [], removidos = [], saltados = {} } = JSON.parse(stored);
         agregados.forEach((id) => idsAutoHoy.add(id));
         removidos.forEach((id) => idsAutoHoy.delete(id));
+        setSaltados(saltados);
+      } else {
+        setSaltados({});
       }
 
       setAgendaIds(idsAutoHoy);
@@ -116,9 +122,7 @@ export default function AgendaPage() {
 
   function guardarOverrides(newIds) {
     const stored = localStorage.getItem(`agenda_${fecha}`);
-    const { agregados: prevAgregados = [], removidos: prevRemovidoss = [] } = stored
-      ? JSON.parse(stored)
-      : {};
+    const { saltados: prevSaltados = {} } = stored ? JSON.parse(stored) : {};
 
     // Clientes con visita hoy según días de visita
     const autoHoy = new Set(
@@ -128,7 +132,12 @@ export default function AgendaPage() {
     const agregados = [...newIds].filter((id) => !autoHoy.has(id));
     const removidos = [...autoHoy].filter((id) => !newIds.has(id));
 
-    localStorage.setItem(`agenda_${fecha}`, JSON.stringify({ agregados, removidos }));
+    // Si un cliente vuelve a estar en la agenda, ya no está "saltado"
+    const saltados = { ...prevSaltados };
+    newIds.forEach((id) => { delete saltados[id]; });
+
+    localStorage.setItem(`agenda_${fecha}`, JSON.stringify({ agregados, removidos, saltados }));
+    setSaltados(saltados);
   }
 
   function agregarCliente(clienteId) {
@@ -145,6 +154,30 @@ export default function AgendaPage() {
     newIds.delete(clienteId);
     setAgendaIds(newIds);
     guardarOverrides(newIds);
+  }
+
+  function saltarCliente() {
+    const clienteId = modalSaltar;
+    const stored = localStorage.getItem(`agenda_${fecha}`);
+    const { agregados = [], removidos = [], saltados: prevSaltados = {} } = stored
+      ? JSON.parse(stored)
+      : {};
+
+    const newIds = new Set(agendaIds);
+    newIds.delete(clienteId);
+    setAgendaIds(newIds);
+
+    const nuevosSaltados = { ...prevSaltados, [clienteId]: motivoSaltar };
+    setSaltados(nuevosSaltados);
+
+    localStorage.setItem(`agenda_${fecha}`, JSON.stringify({
+      agregados: agregados.filter((id) => id !== clienteId),
+      removidos: [...new Set([...removidos, clienteId])],
+      saltados: nuevosSaltados,
+    }));
+
+    setModalSaltar(null);
+    setMotivoSaltar('cliente_ausente');
   }
 
   function setupSync() {
@@ -345,6 +378,14 @@ export default function AgendaPage() {
                 >
                   ✕
                 </button>
+                <div className="flex justify-end mt-1.5">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setModalSaltar(cliente.id); }}
+                    className="px-3 py-2 text-sm bg-gray-100 text-gray-600 rounded-xl font-medium active:bg-gray-200"
+                  >
+                    Saltar
+                  </button>
+                </div>
               </div>
             ))}
 
@@ -356,7 +397,74 @@ export default function AgendaPage() {
             </button>
           </div>
         )}
+
+        {/* Clientes saltados hoy */}
+        {Object.keys(saltados).length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs text-gray-400 uppercase font-semibold mb-2 px-1">Saltados hoy</p>
+            {Object.entries(saltados).map(([id, motivo]) => {
+              const c = todosClientes.find((c) => String(c.id) === String(id));
+              if (!c) return null;
+              const motivoLabel = {
+                cliente_ausente: 'Cliente ausente',
+                lluvia: 'Lluvia',
+                reagendado: 'Reagendado',
+                otro: 'Otro',
+              }[motivo] || motivo;
+              return (
+                <div key={id} className="bg-gray-50 rounded-xl px-4 py-3 mb-2 flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-gray-500">{c.nombre}</p>
+                    <p className="text-xs text-gray-400">{motivoLabel}</p>
+                  </div>
+                  <span className="text-xs bg-gray-200 text-gray-500 px-2 py-1 rounded-full">Saltado</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {/* Modal de motivo para saltar */}
+      {modalSaltar && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end justify-center z-50">
+          <div className="bg-white rounded-t-2xl w-full max-w-md p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">¿Por qué saltás esta visita?</h2>
+            <div className="space-y-2 mb-6">
+              {[
+                ['cliente_ausente', 'Cliente ausente'],
+                ['lluvia', 'Lluvia / mal tiempo'],
+                ['reagendado', 'Reagendado para otro día'],
+                ['otro', 'Otro motivo'],
+              ].map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => setMotivoSaltar(val)}
+                  className={`w-full text-left px-4 py-3 rounded-xl font-medium transition-colors ${
+                    motivoSaltar === val ? 'bg-sky-100 text-sky-700' : 'bg-gray-50 text-gray-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={saltarCliente}
+                className="flex-1 bg-gray-800 text-white font-bold py-3 rounded-xl"
+              >
+                Confirmar
+              </button>
+              <button
+                onClick={() => setModalSaltar(null)}
+                className="px-6 bg-gray-100 text-gray-700 font-bold py-3 rounded-xl"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
