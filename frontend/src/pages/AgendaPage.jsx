@@ -23,31 +23,6 @@ function getISOWeek(date) {
   return 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
 }
 
-function clienteEsDeHoy(cliente) {
-  const { dias_visita, frecuencia_visita, grupo_semana } = cliente;
-  if (!dias_visita) return false;
-
-  const hoy = new Date().getDay();
-  let diaOk = false;
-  try {
-    const arr = JSON.parse(dias_visita);
-    if (Array.isArray(arr)) diaOk = arr.map(Number).includes(hoy);
-  } catch {}
-  if (!diaOk) {
-    const variantes = DIAS[hoy] || [];
-    diaOk = variantes.some((v) => dias_visita.toLowerCase().includes(v));
-  }
-  if (!diaOk) return false;
-
-  if (frecuencia_visita === 'quincenal') {
-    const semana = getISOWeek(new Date());
-    const grupoActual = semana % 2 === 0 ? 'A' : 'B';
-    return (grupo_semana || 'A') === grupoActual;
-  }
-
-  return true;
-}
-
 function clienteEsDeDate(cliente, dateStr) {
   const { dias_visita, frecuencia_visita, grupo_semana } = cliente;
   if (!dias_visita) return false;
@@ -136,7 +111,7 @@ export default function AgendaPage() {
 
       // Calcular agenda automática: clientes con visita programada hoy
       const idsAutoHoy = new Set(
-        (todos || []).filter((c) => clienteEsDeHoy(c)).map((c) => c.id)
+        (todos || []).filter((c) => clienteEsDeDate(c, fecha)).map((c) => c.id)
       );
 
       // Restaurar overrides manuales del día (guardados en localStorage)
@@ -164,7 +139,7 @@ export default function AgendaPage() {
 
     // Clientes con visita hoy según días de visita
     const autoHoy = new Set(
-      todosClientes.filter((c) => clienteEsDeHoy(c)).map((c) => c.id)
+      todosClientes.filter((c) => clienteEsDeDate(c, fecha)).map((c) => c.id)
     );
 
     const agregados = [...newIds].filter((id) => !autoHoy.has(id));
