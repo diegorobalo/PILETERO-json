@@ -3,7 +3,8 @@ import cors from 'cors';
 import sqlite3 from 'sqlite3';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
-import { readFileSync, existsSync } from 'fs';
+import cron from 'node-cron';
+import { readFileSync, existsSync, mkdirSync, copyFileSync, readdirSync, unlinkSync, statSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { networkInterfaces } from 'os';
@@ -92,6 +93,46 @@ app.get('/api/health', (req, res) => {
 
 // Mount API routes
 app.use('/api', routes);
+
+// ==================== BACKUP AUTOMÁTICO ====================
+
+const backupDir = join(__dirname, 'backups');
+
+function hacerBackup() {
+  try {
+    mkdirSync(backupDir, { recursive: true });
+    const timestamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const dest = join(backupDir, `piletero_${timestamp}.db`);
+    copyFileSync(dbPath, dest);
+    console.log(`[backup] Copia guardada: ${dest}`);
+
+    // Mantener solo los últimos 7 backups
+    const archivos = readdirSync(backupDir)
+      .filter(f => f.startsWith('piletero_') && f.endsWith('.db'))
+      .map(f => ({ name: f, time: statSync(join(backupDir, f)).mtimeMs }))
+      .sort((a, b) => b.time - a.time);
+
+    archivos.slice(7).forEach(({ name }) => {
+      try {
+        unlinkSync(join(backupDir, name));
+        console.log(`[backup] Eliminado backup antiguo: ${name}`);
+      } catch (unlinkErr) {
+        console.error(`[backup] No se pudo eliminar ${name}:`, unlinkErr.message);
+      }
+    });
+  } catch (err) {
+    console.error('[backup] Error al hacer backup:', err.message);
+  }
+}
+
+app.post('/api/backup', (req, res) => {
+  try {
+    hacerBackup();
+    res.json({ success: true, message: 'Backup realizado' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // ==================== SOCKET.IO CONNECTION HANDLING ====================
 
@@ -266,6 +307,26 @@ function startServer() {
     console.log(`\n✅ PILETERO corriendo en http://localhost:${PORT}`);
     console.log(`📱 Celular: http://${localIP}:${PORT}\n`);
   });
+
+  // Backup diario a las 20:00
+  cron.schedule('0 20 * * *', hacerBackup);
+  console.log('[backup] Backup automático programado para las 20:00 diarias');
+
+  // Mostrar fecha del último backup
+  try {
+    mkdirSync(backupDir, { recursive: true });
+    const archivosExistentes = readdirSync(backupDir)
+      .filter(f => f.startsWith('piletero_') && f.endsWith('.db'))
+      .sort()
+      .reverse();
+    if (archivosExistentes.length > 0) {
+      console.log(`[backup] Último backup: ${archivosExistentes[0]}`);
+    } else {
+      console.log('[backup] No hay backups previos. Se creará el primero a las 20:00.');
+    }
+  } catch (err) {
+    console.error('[backup] Error al verificar backups existentes:', err.message);
+  }
 }
 
 // Graceful shutdown
