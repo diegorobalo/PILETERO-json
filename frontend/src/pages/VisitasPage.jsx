@@ -4,6 +4,7 @@ import { apiClient } from '../services/api'
 import TaskChecklist from '../components/TaskChecklist'
 import WaterMeasurement from '../components/WaterMeasurement'
 import DosisCalculadora from '../components/DosisCalculadora'
+import SelectorInsumo from '../components/SelectorInsumo'
 
 const TASK_LABELS = {
   limpiafondo: 'Limpiafondo',
@@ -63,7 +64,7 @@ export default function VisitasPage() {
   const [tasks, setTasks] = useState([])
   const [cloro, setCloro] = useState('')
   const [ph, setPh] = useState('')
-  const [quimicosUsados, setQuimicosUsados] = useState({})
+  const [quimicosUsados, setQuimicosUsados] = useState([])
   const [guardando, setGuardando] = useState(false)
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null)
 
@@ -90,6 +91,31 @@ export default function VisitasPage() {
     }
   }
 
+  function handleDosisChange(data) {
+    // data = { condicion, usados (array) }
+    setQuimicosUsados(data.usados || [])
+  }
+
+  function handleEditarCantidad(idx, nuevaCantidad) {
+    const updated = [...quimicosUsados]
+    updated[idx].cantidad = parseFloat(nuevaCantidad)
+    setQuimicosUsados(updated)
+  }
+
+  function handleEliminarInsumo(idx) {
+    setQuimicosUsados(quimicosUsados.filter((_, i) => i !== idx))
+  }
+
+  function handleAgregarInsumo(insumo) {
+    // Evitar duplicados
+    const exists = quimicosUsados.some(q => q.insumo_id === insumo.insumo_id)
+    if (exists) {
+      alert('Ese insumo ya está en la lista')
+      return
+    }
+    setQuimicosUsados([...quimicosUsados, insumo])
+  }
+
   async function guardarVisita() {
     if (!form.cliente_id) return alert('Seleccioná un cliente')
     if (cloro === '' && ph === '') return alert('Ingresá al menos una medición (cloro o pH)')
@@ -112,7 +138,7 @@ export default function VisitasPage() {
       setExpandida(creada.id)
       // Reset form
       setForm({ cliente_id: '', fecha: today, observaciones: '' })
-      setTasks([]); setCloro(''); setPh(''); setQuimicosUsados({})
+      setTasks([]); setCloro(''); setPh(''); setQuimicosUsados([])
       alert('✓ Visita registrada correctamente')
     } catch (e) {
       alert('Error: ' + (e.response?.data?.error || e.message))
@@ -321,7 +347,7 @@ export default function VisitasPage() {
                 volumenLitros={clienteDelForm?.volumen_litros}
                 cloroActual={cloro}
                 phActual={ph}
-                onChange={setQuimicosUsados}
+                onChange={handleDosisChange}
               />
 
               <div className="mb-6">
@@ -333,6 +359,43 @@ export default function VisitasPage() {
                   className="w-full border border-gray-300 rounded px-3 py-2"
                   placeholder="Estado del agua, novedades, etc."
                 />
+              </div>
+
+              {/* Lo que usaste (array editable) */}
+              {quimicosUsados.length > 0 && (
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg space-y-3 border border-blue-200 mb-6">
+                  <h3 className="text-sm font-bold text-blue-900">Lo que usaste</h3>
+                  {quimicosUsados.map((insumo, idx) => (
+                    <div key={idx} className="flex gap-3 items-center bg-white p-3 rounded">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-700">{insumo.nombre}</p>
+                        <div className="flex gap-2 items-center mt-1">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={insumo.cantidad}
+                            onChange={(e) => handleEditarCantidad(idx, e.target.value)}
+                            className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                          />
+                          <span className="text-xs text-gray-500">{insumo.unidad}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleEliminarInsumo(idx)}
+                        className="px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200"
+                      >
+                        ✕ Eliminar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Agregar otro insumo */}
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 mb-6">
+                <p className="text-xs font-semibold text-gray-700 mb-3">Agregar otro insumo</p>
+                <SelectorInsumo onAgregarInsumo={handleAgregarInsumo} />
               </div>
             </div>
 
