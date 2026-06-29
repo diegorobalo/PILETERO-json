@@ -378,7 +378,7 @@ export default function VisitasPage() {
               <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200 mb-6">
                 <h3 className="text-sm font-bold text-blue-900 mb-3">Lo que usaste</h3>
                 {quimicosUsados.length === 0 ? (
-                  <p className="text-xs text-gray-400 space-y-3">Sin insumos agregados aún</p>
+                  <p className="text-xs text-gray-400">Sin insumos agregados aún</p>
                 ) : (
                   <div className="space-y-3">
                     {quimicosUsados.map((insumo, idx) => (
