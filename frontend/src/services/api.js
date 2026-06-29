@@ -78,6 +78,24 @@ const apiClient = {
     return axiosInstance.put(`/clientes/${id}`, data).then((res) => res.data);
   },
 
+  /**
+   * Suspend a cliente
+   * @param {number} id - The cliente id
+   * @returns {Promise<object>} The updated cliente with suspended status
+   */
+  suspenderCliente(id) {
+    return axiosInstance.post(`/clientes/${id}/suspender`).then((res) => res.data);
+  },
+
+  /**
+   * Reactivate a cliente
+   * @param {number} id - The cliente id
+   * @returns {Promise<object>} The updated cliente with active status
+   */
+  reactivarCliente(id) {
+    return axiosInstance.post(`/clientes/${id}/reactivar`).then((res) => res.data);
+  },
+
   // ============== VISITAS ENDPOINTS ==============
 
   /**
