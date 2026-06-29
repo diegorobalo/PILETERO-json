@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import ClientCard from '../components/ClientCard';
 import storageService from '../services/storage';
 import syncService from '../services/sync';
+import { apiClient } from '../services/api';
 import { toastSuccess, toastError, toastInfo } from '../utils/toast';
+import { interpolateMensaje, generateWhatsAppLink } from '../utils/messageInterpolation';
 
 const DIAS = {
   0: ['domingo'],
@@ -89,6 +91,7 @@ export default function AgendaPage() {
   const [modalSaltar, setModalSaltar] = useState(null); // clienteId
   const [motivoSaltar, setMotivoSaltar] = useState('cliente_ausente');
   const [vistaMode, setVistaMode] = useState('hoy'); // 'hoy' | 'semana'
+  const [config, setConfigLocal] = useState({}); // WhatsApp config
 
   async function cargarDatos() {
     try {
@@ -126,6 +129,14 @@ export default function AgendaPage() {
       }
 
       setAgendaIds(idsAutoHoy);
+
+      // Load WhatsApp config
+      try {
+        const cfg = await apiClient.getConfiguracion();
+        setConfigLocal(cfg);
+      } catch (err) {
+        console.warn('Could not load WhatsApp config:', err);
+      }
     } catch (err) {
       console.error('Error cargando agenda:', err);
     } finally {
@@ -191,6 +202,23 @@ export default function AgendaPage() {
 
     setModalSaltar(null);
     setMotivoSaltar('cliente_ausente');
+  }
+
+  function abrirWhatsApp(cliente) {
+    if (!cliente.telefono) {
+      toastError('Este cliente no tiene teléfono registrado');
+      return;
+    }
+
+    const mensaje = config.mensaje_whatsapp_visita ||
+      'Hola {nombre_cliente}, hoy voy a hacer el servicio de mantenimiento en tu pileta. Confirma si está todo bien. Saludos!';
+
+    const interpolated = interpolateMensaje(mensaje, cliente);
+    const link = generateWhatsAppLink(cliente.telefono, interpolated);
+
+    if (link) {
+      window.open(link, '_blank');
+    }
   }
 
   function setupSync() {
@@ -391,13 +419,22 @@ export default function AgendaPage() {
                   estado={getClienteStatus(cliente.id)}
                   onStart={(id) => navigate(`/visita/${id}/${fecha}`)}
                 />
-                <button
-                  onClick={() => quitarCliente(cliente.id)}
-                  className="absolute top-2 right-2 text-gray-300 hover:text-red-400 text-lg leading-none px-2"
-                  title="Quitar de la agenda de hoy"
-                >
-                  ✕
-                </button>
+                <div className="absolute top-2 right-2 flex gap-1">
+                  <button
+                    onClick={() => abrirWhatsApp(cliente)}
+                    className="bg-green-500 hover:bg-green-600 text-white rounded-full w-10 h-10 flex items-center justify-center text-lg shadow-md transition"
+                    title="Enviar WhatsApp"
+                  >
+                    💬
+                  </button>
+                  <button
+                    onClick={() => quitarCliente(cliente.id)}
+                    className="text-gray-300 hover:text-red-400 text-lg leading-none px-2"
+                    title="Quitar de la agenda de hoy"
+                  >
+                    ✕
+                  </button>
+                </div>
                 <div className="flex justify-end mt-1.5">
                   <button
                     onClick={(e) => { e.stopPropagation(); setModalSaltar(cliente.id); }}
