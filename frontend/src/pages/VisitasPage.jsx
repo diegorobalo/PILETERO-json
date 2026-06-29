@@ -344,36 +344,46 @@ export default function VisitasPage() {
                 />
               </div>
 
-              {/* Lo que usaste (array editable) */}
-              {quimicosUsados.length > 0 && (
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg space-y-3 border border-blue-200 mb-6">
-                  <h3 className="text-sm font-bold text-blue-900">Lo que usaste</h3>
-                  {quimicosUsados.map((insumo, idx) => (
-                    <div key={idx} className="flex gap-3 items-center bg-white p-3 rounded">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-700">{insumo.nombre}</p>
-                        <div className="flex gap-2 items-center mt-1">
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={insumo.cantidad}
-                            onChange={(e) => handleEditarCantidad(idx, e.target.value)}
-                            className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
-                          />
-                          <span className="text-xs text-gray-500">{insumo.unidad}</span>
+              {/* Lo que usaste (unificado) */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200 mb-6">
+                <h3 className="text-sm font-bold text-blue-900 mb-3">Lo que usaste</h3>
+                {quimicosUsados.length === 0 ? (
+                  <p className="text-xs text-gray-400">Sin insumos agregados aún</p>
+                ) : (
+                  <div className="space-y-3">
+                    {quimicosUsados.map((insumo) => (
+                      <div key={insumo.insumo_id} className="flex gap-3 items-center bg-white p-3 rounded">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-700">{insumo.nombre}</p>
+                          <div className="flex gap-2 items-center mt-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={insumo.cantidad}
+                              onChange={(e) => {
+                                const idx = quimicosUsados.findIndex(q => q.insumo_id === insumo.insumo_id)
+                                handleEditarCantidad(idx, e.target.value)
+                              }}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                            <span className="text-xs text-gray-500">{insumo.unidad}</span>
+                          </div>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const idx = quimicosUsados.findIndex(q => q.insumo_id === insumo.insumo_id)
+                            handleEliminarInsumo(idx)
+                          }}
+                          className="px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200"
+                        >
+                          ✕ Eliminar
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleEliminarInsumo(idx)}
-                        className="px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200"
-                      >
-                        ✕ Eliminar
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* Agregar otro insumo */}
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 mb-6">

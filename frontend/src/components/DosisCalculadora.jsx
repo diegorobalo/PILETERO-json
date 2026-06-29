@@ -209,45 +209,6 @@ export default function DosisCalculadora({ volumenLitros, cloroActual, phActual,
               )}
             </div>
           </div>
-
-          {/* Sugerencias de DosisCalculadora (array dinámico) */}
-          <div className="bg-gray-50 rounded-xl p-4">
-            <p className="text-sm font-bold text-gray-700 mb-3">Lo que apliqué (editable):</p>
-            <div className="space-y-3">
-              {usados.length === 0 ? (
-                <p className="text-xs text-gray-400">Sin sugerencias para esta condición</p>
-              ) : (
-                usados.map((item, idx) => (
-                  <div key={item.insumo_id} className="flex gap-3 items-center bg-blue-50 p-3 rounded">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-700">{item.nombre}</p>
-                      <div className="flex gap-2 items-center mt-1">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={item.cantidad}
-                          onChange={(e) => {
-                            const updated = [...usados]
-                            updated[idx].cantidad = parseFloat(e.target.value) || 0
-                            setUsados(updated)
-                          }}
-                          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm font-bold"
-                        />
-                        <span className="text-xs text-gray-500">{item.unidad}</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setUsados(usados.filter((_, i) => i !== idx))}
-                      className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                    >
-                      ✕ Quitar
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
         </>
       ) : (
         <div className="bg-gray-50 rounded-xl p-4 text-center text-gray-500 text-sm">
