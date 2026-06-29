@@ -45,8 +45,10 @@ const schema = readFileSync(join(__dirname, 'db', 'schema.sql'), 'utf8');
 const MIGRATIONS = [
   "ALTER TABLE clientes ADD COLUMN frecuencia_visita TEXT DEFAULT 'semanal'",
   "ALTER TABLE clientes ADD COLUMN grupo_semana TEXT DEFAULT 'A'",
+  "ALTER TABLE clientes ADD COLUMN estado TEXT DEFAULT 'activo'",
   "CREATE TABLE IF NOT EXISTS fotos_clientes (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente_id INTEGER NOT NULL, tipo TEXT, ruta_archivo TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE)",
   "CREATE INDEX IF NOT EXISTS idx_fotos_clientes_cliente_id ON fotos_clientes(cliente_id)",
+  "CREATE INDEX IF NOT EXISTS idx_clientes_estado ON clientes(estado)",
   // NUEVAS v1.1:
   "CREATE TABLE IF NOT EXISTS configuracion (clave TEXT PRIMARY KEY, valor TEXT)",
   "CREATE TABLE IF NOT EXISTS gastos (id INTEGER PRIMARY KEY AUTOINCREMENT, descripcion TEXT NOT NULL, monto REAL NOT NULL, fecha DATE NOT NULL, categoria TEXT DEFAULT 'otros', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",

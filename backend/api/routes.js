@@ -200,9 +200,26 @@ router.post('/visitas', async (req, res) => {
       return res.status(404).json({ error: 'Cliente not found' });
     }
 
-    // Procesar insumos dinámicos
-    const quimicosUsados = req.body.quimicos_usados || [];
+    // Procesar insumos dinámicos (backward-compatible)
+    let quimicosUsados = req.body.quimicos_usados || [];
     let warnings = [];
+
+    // Si quimicosUsados es string (JSON viejo), parsearlo
+    if (typeof quimicosUsados === 'string') {
+      try {
+        quimicosUsados = JSON.parse(quimicosUsados);
+      } catch (e) {
+        quimicosUsados = [];
+      }
+    }
+
+    // Si es objeto viejo (formato {cloroGranulado: 100}), convertir a array
+    if (!Array.isArray(quimicosUsados)) {
+      quimicosUsados = databaseService.parseQuimicos(quimicosUsados);
+    } else {
+      // Si ya es array, pero puede tener formato viejo, intentar parsearlo
+      quimicosUsados = databaseService.parseQuimicos(quimicosUsados);
+    }
 
     // Validar input: cada insumo debe tener insumo_id y cantidad
     if (quimicosUsados.length > 0) {
@@ -228,8 +245,12 @@ router.post('/visitas', async (req, res) => {
       }
     });
 
-    // Guardar visita (con el array tal cual)
-    const createdVisita = await databaseService.createVisita(req.body);
+    // Guardar visita (con el array convertido)
+    const visitaData = {
+      ...req.body,
+      quimicos_usados: quimicosUsados
+    };
+    const createdVisita = await databaseService.createVisita(visitaData);
 
     // Descontar stock de cada insumo en paralelo (después de guardar)
     await Promise.all(

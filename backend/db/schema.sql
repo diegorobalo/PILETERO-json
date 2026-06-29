@@ -95,6 +95,6 @@ CREATE INDEX IF NOT EXISTS idx_fotos_clientes_cliente_id ON fotos_clientes(clien
 CREATE INDEX IF NOT EXISTS idx_pagos_fecha ON pagos(fecha);
 CREATE INDEX IF NOT EXISTS idx_clientes_activo ON clientes(activo);
 
--- Migration: Add estado column for client suspension feature (v1.1)
-ALTER TABLE clientes ADD COLUMN estado TEXT DEFAULT 'activo';
-CREATE INDEX IF NOT EXISTS idx_clientes_estado ON clientes(estado);
+-- Migration: Add estado column for client suspension feature (v1.1) - moved to MIGRATIONS array in server.js
+-- ALTER TABLE clientes ADD COLUMN estado TEXT DEFAULT 'activo';
+-- CREATE INDEX IF NOT EXISTS idx_clientes_estado ON clientes(estado);
