@@ -201,35 +201,53 @@ router.post('/visitas', async (req, res) => {
     }
 
     // Procesar insumos dinámicos
-    const quimicosArray = req.body.quimicos_usados || [];
+    const quimicosUsados = req.body.quimicos_usados || [];
     let warnings = [];
 
-    // Validar stock de cada insumo (sin bloquear)
-    for (const insumo of quimicosArray) {
-      const validation = await databaseService.validateInsumoStock(insumo.insumo_id, insumo.cantidad);
+    // Validar input: cada insumo debe tener insumo_id y cantidad
+    if (quimicosUsados.length > 0) {
+      for (const insumo of quimicosUsados) {
+        if (!insumo.insumo_id || insumo.cantidad === undefined) {
+          return res.status(400).json({
+            error: 'Cada insumo debe tener insumo_id y cantidad'
+          });
+        }
+      }
+    }
+
+    // Validar stock de cada insumo en paralelo (sin bloquear)
+    const validations = await Promise.all(
+      quimicosUsados.map(insumo =>
+        databaseService.validateInsumoStock(insumo.insumo_id, insumo.cantidad)
+          .then(validation => ({ insumo, validation }))
+      )
+    );
+    validations.forEach(({ insumo, validation }) => {
       if (!validation.hasStock) {
         warnings.push(`Stock bajo: ${insumo.nombre} (disponible: ${validation.stockDisponible}${insumo.unidad})`);
       }
-    }
+    });
 
     // Guardar visita (con el array tal cual)
     const createdVisita = await databaseService.createVisita(req.body);
 
-    // Descontar stock de cada insumo (después de guardar, en paralelo)
-    for (const insumo of quimicosArray) {
-      try {
-        await databaseService.ajustarStock(insumo.insumo_id, -insumo.cantidad);
-        await databaseService.registrarMovimiento({
-          insumo_id: insumo.insumo_id,
-          tipo: 'uso',
-          cantidad: -insumo.cantidad,
-          origen: 'visita',
-          referencia_id: createdVisita.id
-        });
-      } catch (e) {
-        console.error(`[visitas] Error descuentando ${insumo.nombre}:`, e.message);
-      }
-    }
+    // Descontar stock de cada insumo en paralelo (después de guardar)
+    await Promise.all(
+      quimicosUsados.map(insumo =>
+        databaseService.ajustarStock(insumo.insumo_id, -insumo.cantidad)
+          .then(() => databaseService.registrarMovimiento({
+            insumo_id: insumo.insumo_id,
+            tipo: 'uso',
+            cantidad: -insumo.cantidad,
+            origen: 'visita',
+            referencia_id: createdVisita.id
+          }))
+          .catch(e => {
+            console.error(`[visitas] CRITICAL: Failed to deduct stock for insumo ${insumo.insumo_id} after saving visita ${createdVisita.id}. Manual correction needed.`, e.message);
+            // Nota: Visita fue guardada pero stock no decrementó. Inconsistencia de datos.
+          })
+      )
+    );
 
     // Responder con warnings si hubo stock bajo
     const response = { ...createdVisita, warnings };
