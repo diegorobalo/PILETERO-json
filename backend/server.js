@@ -55,6 +55,8 @@ const MIGRATIONS = [
   "CREATE TABLE IF NOT EXISTS movimientos_inventario (id INTEGER PRIMARY KEY AUTOINCREMENT, insumo_id INTEGER NOT NULL, tipo TEXT NOT NULL, cantidad REAL NOT NULL, origen TEXT DEFAULT 'manual', referencia_id INTEGER, fecha DATE NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (insumo_id) REFERENCES inventario(id) ON DELETE CASCADE)",
   "CREATE INDEX IF NOT EXISTS idx_movimientos_insumo_id ON movimientos_inventario(insumo_id)",
   "CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha)",
+  // NUEVAS v1.1.1 - Extras/Adicionales
+  "ALTER TABLE visitas ADD COLUMN extras JSON DEFAULT '[]'",
 ];
 
 db.exec(schema, (err) => {
