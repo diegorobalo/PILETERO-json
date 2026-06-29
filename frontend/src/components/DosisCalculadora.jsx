@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 const CONDICIONES = [
   { id: 'cristalina', emoji: '💎', label: 'Cristalina', desc: 'Agua transparente' },
@@ -112,13 +112,16 @@ export default function DosisCalculadora({ volumenLitros, cloroActual, phActual,
     }
 
     setUsados(sugerencias)
-  }, [condicion, cloroActual, phActual, volumenLitros])
+  }, [condicion, cloroActual, phActual, volumenLitros, dosis])
 
   useEffect(() => {
     if (onChange) onChange({ condicion, usados })
   }, [usados, condicion, onChange])
 
-  const phOk = !isNaN(parseFloat(phActual)) && parseFloat(phActual) >= 7.2 && parseFloat(phActual) <= 7.6
+  const phOk = useMemo(() => {
+    const phVal = parseFloat(phActual)
+    return !isNaN(phVal) && phVal >= 7.2 && phVal <= 7.6
+  }, [phActual])
 
   return (
     <div className="mb-6">
@@ -215,7 +218,7 @@ export default function DosisCalculadora({ volumenLitros, cloroActual, phActual,
                 <p className="text-xs text-gray-400">Sin sugerencias para esta condición</p>
               ) : (
                 usados.map((item, idx) => (
-                  <div key={idx} className="flex gap-3 items-center bg-blue-50 p-3 rounded">
+                  <div key={item.insumo_id} className="flex gap-3 items-center bg-blue-50 p-3 rounded">
                     <div className="flex-1">
                       <p className="text-sm font-medium text-gray-700">{item.nombre}</p>
                       <div className="flex gap-2 items-center mt-1">
@@ -225,7 +228,7 @@ export default function DosisCalculadora({ volumenLitros, cloroActual, phActual,
                           value={item.cantidad}
                           onChange={(e) => {
                             const updated = [...usados]
-                            updated[idx].cantidad = parseFloat(e.target.value)
+                            updated[idx].cantidad = parseFloat(e.target.value) || 0
                             setUsados(updated)
                           }}
                           className="w-20 px-2 py-1 border border-gray-300 rounded text-sm font-bold"
