@@ -74,6 +74,7 @@ export default function ClientForm({ initialData, onSubmit, onCancel }) {
   const [diasSeleccionados, setDiasSeleccionados] = useState([])
   const [fotosCliente, setFotosCliente] = useState([])
   const [subiendoFoto, setSubiendoFoto] = useState(false)
+  const [customConstruccion, setCustomConstruccion] = useState('')
   const fileInputRef = useRef(null)
 
   // Calculadora de litros
@@ -83,13 +84,18 @@ export default function ClientForm({ initialData, onSubmit, onCancel }) {
 
   useEffect(() => {
     if (initialData) {
-      const { dias_visita, ...rest } = initialData
+      const { dias_visita, tipo_construccion, ...rest } = initialData
+
+      // Detect if tipo_construccion is a custom value (not one of the predefined options)
+      const OPCIONES_PREDEFINIDAS = ['fibra', 'material', 'pintada']
+      const isCustom = tipo_construccion && !OPCIONES_PREDEFINIDAS.includes(tipo_construccion)
+
       setFormData({
         nombre: '',
         direccion: '',
         telefono: '',
         volumen_litros: '',
-        tipo_construccion: '',
+        tipo_construccion: isCustom ? 'otro' : (tipo_construccion || ''),
         equipamiento: '',
         modelo_filtro: '',
         tipo_abono: '',
@@ -99,6 +105,14 @@ export default function ClientForm({ initialData, onSubmit, onCancel }) {
         notas_acceso: '',
         ...rest,
       })
+
+      // Set custom construction value if needed
+      if (isCustom) {
+        setCustomConstruccion(tipo_construccion)
+      } else {
+        setCustomConstruccion('')
+      }
+
       setDiasSeleccionados(parseDias(dias_visita))
     }
   }, [initialData])
@@ -134,7 +148,22 @@ export default function ClientForm({ initialData, onSubmit, onCancel }) {
       alert('Por favor completa nombre y dirección')
       return
     }
-    onSubmit({ ...formData, dias_visita: diasSeleccionados.length ? JSON.stringify(diasSeleccionados) : '' })
+
+    // Handle custom construction value
+    let finalTipoConstruccion = formData.tipo_construccion
+    if (formData.tipo_construccion === 'otro') {
+      if (!customConstruccion.trim()) {
+        alert('Por favor ingresa el tipo de construcción personalizado')
+        return
+      }
+      finalTipoConstruccion = customConstruccion.trim()
+    }
+
+    onSubmit({
+      ...formData,
+      tipo_construccion: finalTipoConstruccion,
+      dias_visita: diasSeleccionados.length ? JSON.stringify(diasSeleccionados) : '',
+    })
   }
 
   async function handleFileChange(e) {
@@ -271,10 +300,25 @@ export default function ClientForm({ initialData, onSubmit, onCancel }) {
           <select name="tipo_construccion" value={formData.tipo_construccion} onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">Seleccionar...</option>
-            <option value="fibra">Fibra</option>
-            <option value="material">Material</option>
-            <option value="pintada">Pintada</option>
+            <option value="fibra">Pileta de obra</option>
+            <option value="material">Pileta estructurada</option>
+            <option value="pintada">Pileta inflable</option>
+            <option value="otro">Otros</option>
           </select>
+
+          {/* Custom construction input - only show when "Otros" is selected */}
+          {formData.tipo_construccion === 'otro' && (
+            <div className="mt-3">
+              <input
+                type="text"
+                value={customConstruccion}
+                onChange={(e) => setCustomConstruccion(e.target.value)}
+                placeholder="ej: ferrocemento, fibra de vidrio custom"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">Describe el material o tipo de construcción</p>
+            </div>
+          )}
         </div>
 
         {/* Equipamiento */}
