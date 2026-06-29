@@ -49,40 +49,74 @@ function calcularDosis(volumenLitros, cloroActual, phActual, condicion) {
 
 export default function DosisCalculadora({ volumenLitros, cloroActual, phActual, onChange }) {
   const [condicion, setCondicion] = useState('cristalina')
-  const [usados, setUsados] = useState({
-    cloroGranulado: '',
-    cloroLiquido: '',
-    phMas: '',
-    phMenos: '',
-    algicida: '',
-    floculante: '',
-    otros: '',
-  })
+  const [usados, setUsados] = useState([])
 
   const dosis = calcularDosis(volumenLitros, cloroActual, phActual, condicion)
 
-  // Pre-fill "usados" with suggestions whenever dosis changes
+  // Pre-fill "usados" con sugerencias como array
   useEffect(() => {
-    if (!dosis) return
-    setUsados({
-      cloroGranulado: dosis.cloroGranulado > 0 ? String(dosis.cloroGranulado) : '',
-      cloroLiquido: '',
-      phMas: dosis.phMas > 0 ? String(dosis.phMas) : '',
-      phMenos: dosis.phMenos > 0 ? String(dosis.phMenos) : '',
-      algicida: dosis.algicida > 0 ? String(dosis.algicida) : '',
-      floculante: dosis.floculante > 0 ? String(dosis.floculante) : '',
-      otros: '',
-    })
+    if (!dosis) {
+      setUsados([])
+      return
+    }
+
+    const sugerencias = []
+
+    if (dosis.cloroGranulado > 0) {
+      sugerencias.push({
+        insumo_id: 1,
+        nombre: 'Cloro Granulado',
+        cantidad: dosis.cloroGranulado,
+        unidad: 'g',
+      })
+    }
+    if (dosis.cloroLiquido > 0) {
+      sugerencias.push({
+        insumo_id: 2,
+        nombre: 'Cloro Líquido',
+        cantidad: dosis.cloroLiquido,
+        unidad: 'ml',
+      })
+    }
+    if (dosis.phMas > 0) {
+      sugerencias.push({
+        insumo_id: 3,
+        nombre: 'pH+',
+        cantidad: dosis.phMas,
+        unidad: 'g',
+      })
+    }
+    if (dosis.phMenos > 0) {
+      sugerencias.push({
+        insumo_id: 4,
+        nombre: 'pH−',
+        cantidad: dosis.phMenos,
+        unidad: 'ml',
+      })
+    }
+    if (dosis.algicida > 0) {
+      sugerencias.push({
+        insumo_id: 5,
+        nombre: 'Algicida',
+        cantidad: dosis.algicida,
+        unidad: 'ml',
+      })
+    }
+    if (dosis.floculante > 0) {
+      sugerencias.push({
+        insumo_id: 6,
+        nombre: 'Floculante',
+        cantidad: dosis.floculante,
+        unidad: 'ml',
+      })
+    }
+
+    setUsados(sugerencias)
   }, [condicion, cloroActual, phActual, volumenLitros])
 
   useEffect(() => {
-    if (onChange) onChange({ condicion, ...usados })
-  }, [usados, condicion])
-
-  const handleUsado = (field, value) => {
-    const updated = { ...usados, [field]: value }
-    setUsados(updated)
-  }
+    if (onChange) onChange({ condicion, usados })
+  }, [usados, condicion, onChange])
 
   const phOk = !isNaN(parseFloat(phActual)) && parseFloat(phActual) >= 7.2 && parseFloat(phActual) <= 7.6
 
@@ -173,100 +207,42 @@ export default function DosisCalculadora({ volumenLitros, cloroActual, phActual,
             </div>
           </div>
 
-          {/* Lo que apliqué */}
+          {/* Sugerencias de DosisCalculadora (array dinámico) */}
           <div className="bg-gray-50 rounded-xl p-4">
             <p className="text-sm font-bold text-gray-700 mb-3">Lo que apliqué (editable):</p>
             <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-600 w-36 shrink-0">Cloro granulado</label>
-                <input
-                  type="number"
-                  value={usados.cloroGranulado}
-                  onChange={(e) => handleUsado('cloroGranulado', e.target.value)}
-                  placeholder="0"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-center font-bold"
-                />
-                <span className="text-sm text-gray-500 w-6">g</span>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-600 w-36 shrink-0">Cloro líquido</label>
-                <input
-                  type="number"
-                  value={usados.cloroLiquido}
-                  onChange={(e) => handleUsado('cloroLiquido', e.target.value)}
-                  placeholder="0"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-center font-bold"
-                />
-                <span className="text-sm text-gray-500 w-6">ml</span>
-              </div>
-
-              {(dosis.phMas > 0 || usados.phMas) && (
-                <div className="flex items-center gap-3">
-                  <label className="text-sm text-gray-600 w-36 shrink-0">pH+</label>
-                  <input
-                    type="number"
-                    value={usados.phMas}
-                    onChange={(e) => handleUsado('phMas', e.target.value)}
-                    placeholder="0"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-center font-bold"
-                  />
-                  <span className="text-sm text-gray-500 w-6">g</span>
-                </div>
+              {usados.length === 0 ? (
+                <p className="text-xs text-gray-400">Sin sugerencias para esta condición</p>
+              ) : (
+                usados.map((item, idx) => (
+                  <div key={idx} className="flex gap-3 items-center bg-blue-50 p-3 rounded">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-700">{item.nombre}</p>
+                      <div className="flex gap-2 items-center mt-1">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={item.cantidad}
+                          onChange={(e) => {
+                            const updated = [...usados]
+                            updated[idx].cantidad = parseFloat(e.target.value)
+                            setUsados(updated)
+                          }}
+                          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm font-bold"
+                        />
+                        <span className="text-xs text-gray-500">{item.unidad}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setUsados(usados.filter((_, i) => i !== idx))}
+                      className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                    >
+                      ✕ Quitar
+                    </button>
+                  </div>
+                ))
               )}
-
-              {(dosis.phMenos > 0 || usados.phMenos) && (
-                <div className="flex items-center gap-3">
-                  <label className="text-sm text-gray-600 w-36 shrink-0">pH−</label>
-                  <input
-                    type="number"
-                    value={usados.phMenos}
-                    onChange={(e) => handleUsado('phMenos', e.target.value)}
-                    placeholder="0"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-center font-bold"
-                  />
-                  <span className="text-sm text-gray-500 w-6">ml</span>
-                </div>
-              )}
-
-              {(dosis.algicida > 0 || usados.algicida) && (
-                <div className="flex items-center gap-3">
-                  <label className="text-sm text-gray-600 w-36 shrink-0">Algicida</label>
-                  <input
-                    type="number"
-                    value={usados.algicida}
-                    onChange={(e) => handleUsado('algicida', e.target.value)}
-                    placeholder="0"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-center font-bold"
-                  />
-                  <span className="text-sm text-gray-500 w-6">ml</span>
-                </div>
-              )}
-
-              {(dosis.floculante > 0 || usados.floculante) && (
-                <div className="flex items-center gap-3">
-                  <label className="text-sm text-gray-600 w-36 shrink-0">Floculante</label>
-                  <input
-                    type="number"
-                    value={usados.floculante}
-                    onChange={(e) => handleUsado('floculante', e.target.value)}
-                    placeholder="0"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-center font-bold"
-                  />
-                  <span className="text-sm text-gray-500 w-6">ml</span>
-                </div>
-              )}
-
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-gray-600 w-36 shrink-0">Otros</label>
-                <input
-                  type="text"
-                  value={usados.otros}
-                  onChange={(e) => handleUsado('otros', e.target.value)}
-                  placeholder="ej: 200g de estabilizador"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
-              </div>
             </div>
           </div>
         </>
