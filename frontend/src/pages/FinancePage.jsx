@@ -149,7 +149,9 @@ export default function FinancePage() {
     catch { toastError('No se pudo eliminar') }
   }
 
-  const clientesConStatus = clientes.map(c => {
+  const clientesActivos = clientes.filter(c => c.estado === 'activo')
+
+  const clientesConStatus = clientesActivos.map(c => {
     const pagosMes = pagos.filter(p => p.cliente_id === c.id && p.fecha?.startsWith(mes))
     const totalPagado = pagosMes.reduce((s, p) => s + (p.monto || 0), 0)
     const esperado = c.precio_abono || 0
@@ -161,7 +163,7 @@ export default function FinancePage() {
   const totalEsperado = conPrecio.reduce((s, c) => s + c.esperado, 0)
   const totalCobrado = conPrecio.reduce((s, c) => s + Math.min(c.totalPagado, c.esperado), 0)
   const totalDeuda = conPrecio.reduce((s, c) => s + c.deuda, 0)
-  const pagosFiltrados = mes ? pagos.filter(p => p.fecha?.startsWith(mes)) : pagos
+  const pagosFiltrados = mes ? pagos.filter(p => p.fecha?.startsWith(mes) && clientesActivos.some(c => c.id === p.cliente_id)) : pagos.filter(p => clientesActivos.some(c => c.id === p.cliente_id))
 
   return (
     <div className="min-h-screen bg-sky-50">
@@ -349,7 +351,9 @@ export default function FinancePage() {
               const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
               const filas = meses.map((label, i) => {
                 const key = `${anio}-${String(i+1).padStart(2,'0')}`
-                const cobrado = pagos.filter(p => p.fecha?.startsWith(key)).reduce((s,p) => s+(p.monto||0), 0)
+                const pagosDelMes = pagos.filter(p => p.fecha?.startsWith(key))
+                const pagosActivos = pagosDelMes.filter(p => clientesActivos.some(c => c.id === p.cliente_id))
+                const cobrado = pagosActivos.reduce((s,p) => s+(p.monto||0), 0)
                 const gastado = gastos.filter(g => g.fecha?.startsWith(key)).reduce((s,g) => s+(g.monto||0), 0)
                 return { label, cobrado, gastado, ganancia: cobrado - gastado }
               })
