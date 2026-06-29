@@ -83,6 +83,50 @@ router.put('/clientes/:id', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/clientes/:id/suspender
+ * Suspend a client (temporarily disable without deleting)
+ */
+router.post('/clientes/:id/suspender', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if client exists
+    const cliente = await databaseService.getClienteById(id);
+    if (!cliente) {
+      return res.status(404).json({ error: 'Cliente not found' });
+    }
+
+    const suspendedCliente = await databaseService.suspenderCliente(id);
+    res.json({ success: true, cliente: suspendedCliente });
+  } catch (error) {
+    console.error('Error suspending cliente:', error);
+    res.status(500).json({ error: 'Failed to suspend client' });
+  }
+});
+
+/**
+ * POST /api/clientes/:id/reactivar
+ * Reactivate a suspended client
+ */
+router.post('/clientes/:id/reactivar', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if client exists
+    const cliente = await databaseService.getClienteById(id);
+    if (!cliente) {
+      return res.status(404).json({ error: 'Cliente not found' });
+    }
+
+    const reactivatedCliente = await databaseService.reactivarCliente(id);
+    res.json({ success: true, cliente: reactivatedCliente });
+  } catch (error) {
+    console.error('Error reactivating cliente:', error);
+    res.status(500).json({ error: 'Failed to reactivate client' });
+  }
+});
+
 // ==================== VISITAS ENDPOINTS ====================
 
 /**
