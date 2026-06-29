@@ -50,6 +50,9 @@ export default function VisitasPage() {
   const [quimicosUsados, setQuimicosUsados] = useState([])
   const [guardando, setGuardando] = useState(false)
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null)
+  const [extras, setExtras] = useState([])
+  const [extraDescripcion, setExtraDescripcion] = useState('')
+  const [extraMonto, setExtraMonto] = useState('')
 
   useEffect(() => { cargar() }, [])
 
@@ -99,6 +102,29 @@ export default function VisitasPage() {
     setQuimicosUsados([...quimicosUsados, insumo])
   }
 
+  function handleAgregarExtra() {
+    if (!extraDescripcion.trim() || !extraMonto) {
+      alert('Ingresá descripción y monto')
+      return
+    }
+    const monto = parseFloat(extraMonto)
+    if (isNaN(monto) || monto <= 0) {
+      alert('Monto debe ser mayor a 0')
+      return
+    }
+    setExtras([...extras, { id: Date.now(), descripcion: extraDescripcion, monto }])
+    setExtraDescripcion('')
+    setExtraMonto('')
+  }
+
+  function handleEliminarExtra(id) {
+    setExtras(extras.filter(e => e.id !== id))
+  }
+
+  function calcularTotalExtras() {
+    return extras.reduce((sum, e) => sum + e.monto, 0)
+  }
+
   async function guardarVisita() {
     if (!form.cliente_id) return alert('Seleccioná un cliente')
     if (cloro === '' && ph === '') return alert('Ingresá al menos una medición (cloro o pH)')
@@ -114,6 +140,7 @@ export default function VisitasPage() {
         ph: ph === '' ? null : parseFloat(ph),
         quimicos_usados: quimicosUsados,
         observaciones: form.observaciones,
+        extras: extras,
       }
       const creada = await apiClient.createVisita(visita)
       await cargar()
@@ -122,6 +149,9 @@ export default function VisitasPage() {
       // Reset form
       setForm({ cliente_id: '', fecha: today, observaciones: '' })
       setTasks([]); setCloro(''); setPh(''); setQuimicosUsados([])
+      setExtras([])
+      setExtraDescripcion('')
+      setExtraMonto('')
       alert('✓ Visita registrada correctamente')
     } catch (e) {
       alert('Error: ' + (e.response?.data?.error || e.message))
@@ -348,10 +378,10 @@ export default function VisitasPage() {
               <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200 mb-6">
                 <h3 className="text-sm font-bold text-blue-900 mb-3">Lo que usaste</h3>
                 {quimicosUsados.length === 0 ? (
-                  <p className="text-xs text-gray-400">Sin insumos agregados aún</p>
+                  <p className="text-xs text-gray-400 space-y-3">Sin insumos agregados aún</p>
                 ) : (
                   <div className="space-y-3">
-                    {quimicosUsados.map((insumo) => (
+                    {quimicosUsados.map((insumo, idx) => (
                       <div key={insumo.insumo_id} className="flex gap-3 items-center bg-white p-3 rounded">
                         <div className="flex-1">
                           <p className="text-sm font-medium text-gray-700">{insumo.nombre}</p>
@@ -361,7 +391,6 @@ export default function VisitasPage() {
                               step="0.01"
                               value={insumo.cantidad}
                               onChange={(e) => {
-                                const idx = quimicosUsados.findIndex(q => q.insumo_id === insumo.insumo_id)
                                 handleEditarCantidad(idx, e.target.value)
                               }}
                               className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
@@ -372,7 +401,6 @@ export default function VisitasPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            const idx = quimicosUsados.findIndex(q => q.insumo_id === insumo.insumo_id)
                             handleEliminarInsumo(idx)
                           }}
                           className="px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200"
@@ -389,6 +417,75 @@ export default function VisitasPage() {
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 mb-6">
                 <p className="text-xs font-semibold text-gray-700 mb-3">Agregar otro insumo</p>
                 <SelectorInsumo onAgregarInsumo={handleAgregarInsumo} />
+              </div>
+
+              {/* Extras / Adicionales por cobrar */}
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200 mb-6">
+                <h3 className="text-sm font-bold text-purple-900 mb-3">Extras / Adicionales por cobrar</h3>
+
+                {extras.length === 0 ? (
+                  <p className="text-xs text-gray-400 mb-3">Sin extras agregados aún</p>
+                ) : (
+                  <div className="mb-4">
+                    <table className="w-full text-sm mb-3">
+                      <thead>
+                        <tr className="border-b border-purple-300">
+                          <th className="text-left text-xs text-purple-700 pb-2">Descripción</th>
+                          <th className="text-right text-xs text-purple-700 pb-2">Monto</th>
+                          <th className="text-center text-xs text-purple-700 pb-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="space-y-2">
+                        {extras.map(extra => (
+                          <tr key={extra.id} className="border-b border-purple-200 bg-white bg-opacity-60">
+                            <td className="text-gray-700 py-2">{extra.descripcion}</td>
+                            <td className="text-right text-gray-700 py-2">${extra.monto.toFixed(2)}</td>
+                            <td className="text-center py-2">
+                              <button
+                                type="button"
+                                onClick={() => handleEliminarExtra(extra.id)}
+                                className="text-xs text-red-600 hover:text-red-800 font-semibold"
+                              >
+                                ✕
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="bg-purple-200 bg-opacity-50">
+                          <td className="font-bold text-purple-900 py-2">Total</td>
+                          <td className="text-right font-bold text-purple-900 py-2">${calcularTotalExtras().toFixed(2)}</td>
+                          <td></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    value={extraDescripcion}
+                    onChange={e => setExtraDescripcion(e.target.value)}
+                    placeholder="Descripción"
+                    className="col-span-2 border border-purple-300 rounded px-3 py-2 text-sm"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={extraMonto}
+                    onChange={e => setExtraMonto(e.target.value)}
+                    placeholder="Monto"
+                    className="border border-purple-300 rounded px-3 py-2 text-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAgregarExtra}
+                  className="w-full mt-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded"
+                >
+                  + Agregar extra
+                </button>
               </div>
             </div>
 
