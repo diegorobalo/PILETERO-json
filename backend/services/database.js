@@ -57,10 +57,10 @@ class DatabaseService {
   // ==================== CLIENTES (Clients) ====================
 
   /**
-   * Get all active clients
+   * Get all clients (both active and suspended)
    */
   async getAllClientes() {
-    return this.query('SELECT * FROM clientes WHERE activo = 1 ORDER BY nombre');
+    return this.query('SELECT * FROM clientes ORDER BY nombre');
   }
 
   /**
@@ -156,6 +156,24 @@ class DatabaseService {
     const sql = `UPDATE clientes SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
 
     await this.execute(sql, params);
+    return this.getClienteById(id);
+  }
+
+  /**
+   * Suspend a client (mark as suspendido)
+   */
+  async suspenderCliente(id) {
+    const sql = `UPDATE clientes SET estado = 'suspendido', updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
+    await this.execute(sql, [id]);
+    return this.getClienteById(id);
+  }
+
+  /**
+   * Reactivate a suspended client (mark as activo)
+   */
+  async reactivarCliente(id) {
+    const sql = `UPDATE clientes SET estado = 'activo', updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
+    await this.execute(sql, [id]);
     return this.getClienteById(id);
   }
 
@@ -388,7 +406,7 @@ class DatabaseService {
 
   async aumentoPreciosMasivo(porcentaje) {
     const sql = `UPDATE clientes SET precio_abono = ROUND(precio_abono * (1.0 + ? / 100.0)), updated_at = CURRENT_TIMESTAMP
-                 WHERE activo = 1 AND precio_abono IS NOT NULL AND precio_abono > 0`
+                 WHERE activo = 1 AND estado = 'activo' AND precio_abono IS NOT NULL AND precio_abono > 0`
     const result = await this.execute(sql, [porcentaje])
     return { updated: result.changes }
   }
