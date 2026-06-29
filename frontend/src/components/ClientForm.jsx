@@ -75,6 +75,7 @@ export default function ClientForm({ initialData, onSubmit, onCancel }) {
   const [fotosCliente, setFotosCliente] = useState([])
   const [subiendoFoto, setSubiendoFoto] = useState(false)
   const [customConstruccion, setCustomConstruccion] = useState('')
+  const [suspending, setSuspending] = useState(false)
   const fileInputRef = useRef(null)
 
   // Calculadora de litros
@@ -191,6 +192,31 @@ export default function ClientForm({ initialData, onSubmit, onCancel }) {
       setFotosCliente(prev => prev.filter(f => f.id !== id))
     } catch {
       alert('No se pudo eliminar la foto')
+    }
+  }
+
+  async function handleToggleSuspend() {
+    if (!initialData?.id) return
+
+    const isSuspended = initialData.estado === 'suspendido'
+    const actionFn = isSuspended ? apiClient.reactivarCliente : apiClient.suspenderCliente
+    const actionLabel = isSuspended ? 'Reactivar' : 'Suspender'
+
+    if (!confirm(`¿${actionLabel} cliente "${initialData.nombre}"?`)) return
+
+    setSuspending(true)
+    try {
+      const result = await actionFn(initialData.id)
+      if (result.success || result.cliente) {
+        // Reload the cliente to reflect new estado
+        const updated = await apiClient.getCliente(initialData.id)
+        onSubmit(updated)
+      }
+    } catch (error) {
+      console.error('Error toggling suspend:', error)
+      alert(`Error: ${error.message}`)
+    } finally {
+      setSuspending(false)
     }
   }
 
@@ -503,6 +529,20 @@ export default function ClientForm({ initialData, onSubmit, onCancel }) {
 
         {/* Buttons */}
         <div className="flex gap-4 mt-6">
+          {isEditMode && (
+            <button
+              type="button"
+              onClick={handleToggleSuspend}
+              disabled={suspending}
+              className={`px-4 py-2 rounded font-medium transition ${
+                initialData.estado === 'suspendido'
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                  : 'bg-red-600 hover:bg-red-700 text-white'
+              } disabled:opacity-50`}
+            >
+              {suspending ? 'Procesando...' : initialData.estado === 'suspendido' ? 'Reactivar' : 'Suspender'}
+            </button>
+          )}
           <button type="submit"
             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
             Guardar Cliente

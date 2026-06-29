@@ -289,8 +289,12 @@ export default function AgendaPage() {
     return () => window.removeEventListener('online', autoSync);
   }, []);
 
-  const clientesDeHoy = todosClientes.filter((c) => agendaIds.has(c.id));
-  const clientesNoEnAgenda = todosClientes.filter((c) => !agendaIds.has(c.id));
+  const clientesDeHoy = todosClientes
+    .filter((c) => c.estado === 'activo')
+    .filter((c) => agendaIds.has(c.id));
+  const clientesNoEnAgenda = todosClientes
+    .filter((c) => c.estado === 'activo')
+    .filter((c) => !agendaIds.has(c.id));
 
   if (loading) {
     return (
@@ -486,7 +490,9 @@ export default function AgendaPage() {
       {vistaMode === 'semana' && (
         <div className="p-4 space-y-3">
           {getDiasSemana().map((dateStr) => {
-            const clientesDia = todosClientes.filter((c) => clienteEsDeDate(c, dateStr));
+            const clientesDia = todosClientes
+              .filter((c) => c.estado === 'activo')
+              .filter((c) => clienteEsDeDate(c, dateStr));
             const esHoy = dateStr === fecha;
             const d = new Date(dateStr + 'T00:00:00');
             const label = d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
