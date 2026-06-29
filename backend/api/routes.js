@@ -183,6 +183,7 @@ router.get('/visitas/cliente/:clienteId', async (req, res) => {
  * POST /api/visitas
  * Create a new visit
  * Required: cliente_id, fecha
+ * Optional: quimicos_usados (dynamic array: [{ insumo_id, nombre, cantidad, unidad }, ...])
  */
 router.post('/visitas', async (req, res) => {
   try {
@@ -199,8 +200,40 @@ router.post('/visitas', async (req, res) => {
       return res.status(404).json({ error: 'Cliente not found' });
     }
 
-    const visita = await databaseService.createVisita(req.body);
-    res.status(201).json(visita);
+    // Procesar insumos dinámicos
+    const quimicosArray = req.body.quimicos_usados || [];
+    let warnings = [];
+
+    // Validar stock de cada insumo (sin bloquear)
+    for (const insumo of quimicosArray) {
+      const validation = await databaseService.validateInsumoStock(insumo.insumo_id, insumo.cantidad);
+      if (!validation.hasStock) {
+        warnings.push(`Stock bajo: ${insumo.nombre} (disponible: ${validation.stockDisponible}${insumo.unidad})`);
+      }
+    }
+
+    // Guardar visita (con el array tal cual)
+    const createdVisita = await databaseService.createVisita(req.body);
+
+    // Descontar stock de cada insumo (después de guardar, en paralelo)
+    for (const insumo of quimicosArray) {
+      try {
+        await databaseService.ajustarStock(insumo.insumo_id, -insumo.cantidad);
+        await databaseService.registrarMovimiento({
+          insumo_id: insumo.insumo_id,
+          tipo: 'uso',
+          cantidad: -insumo.cantidad,
+          origen: 'visita',
+          referencia_id: createdVisita.id
+        });
+      } catch (e) {
+        console.error(`[visitas] Error descuentando ${insumo.nombre}:`, e.message);
+      }
+    }
+
+    // Responder con warnings si hubo stock bajo
+    const response = { ...createdVisita, warnings };
+    res.status(201).json(response);
   } catch (error) {
     console.error('Error creating visita:', error);
     res.status(500).json({ error: 'Failed to create visit' });
