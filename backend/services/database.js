@@ -234,15 +234,16 @@ class DatabaseService {
       cloro_ppm,
       ph,
       quimicos_usados,
-      observaciones
+      observaciones,
+      extras
     } = data;
 
     const sql = `
       INSERT INTO visitas (
         cliente_id, fecha, hora_inicio, hora_fin, tareas_realizadas,
-        cloro_ppm, ph, quimicos_usados, observaciones
+        cloro_ppm, ph, quimicos_usados, observaciones, extras
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const params = [
@@ -254,7 +255,8 @@ class DatabaseService {
       cloro_ppm || null,
       ph || null,
       typeof quimicos_usados === 'string' ? quimicos_usados : (quimicos_usados ? JSON.stringify(quimicos_usados) : null),
-      observaciones || null
+      observaciones || null,
+      typeof extras === 'string' ? extras : (extras ? JSON.stringify(extras) : JSON.stringify([]))
     ];
 
     const result = await this.execute(sql, params);
