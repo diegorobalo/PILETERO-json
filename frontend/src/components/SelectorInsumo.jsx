@@ -20,7 +20,11 @@ export default function SelectorInsumo({ onAgregarInsumo }) {
       const filtrada = lista.filter(i => i.nombre.toLowerCase() !== 'agua')
       setInsumos(filtrada)
     } catch (e) {
-      setError('No se pudieron cargar insumos')
+      console.error('cargarInsumos error:', e)
+      const msg = e.message?.includes('Network')
+        ? 'Sin conexión al servidor'
+        : 'Error al cargar insumos'
+      setError(msg)
     } finally {
       setLoading(false)
     }
@@ -32,8 +36,12 @@ export default function SelectorInsumo({ onAgregarInsumo }) {
       return
     }
 
-    const insumo = insumos.find(i => i.id === parseInt(seleccionado))
-    if (!insumo) return
+    const insumo = insumos.find(i => i.id === parseInt(seleccionado, 10))
+    if (!insumo) {
+      alert('El insumo seleccionado ya no está disponible')
+      setSeleccionado('')
+      return
+    }
 
     onAgregarInsumo({
       insumo_id: insumo.id,
@@ -49,6 +57,10 @@ export default function SelectorInsumo({ onAgregarInsumo }) {
   if (loading) return <div className="text-sm text-gray-400">Cargando insumos...</div>
   if (error) return <div className="text-sm text-red-500">{error}</div>
 
+  // Optimización: calcular insumo seleccionado una sola vez
+  const insumoSeleccionado = insumos.find(i => i.id === parseInt(seleccionado, 10))
+  const unidadActual = insumoSeleccionado?.unidad || 'g'
+
   return (
     <div className="flex gap-2 items-end">
       <div className="flex-1">
@@ -61,7 +73,7 @@ export default function SelectorInsumo({ onAgregarInsumo }) {
           <option value="">-- Seleccioná insumo --</option>
           {insumos.map(i => (
             <option key={i.id} value={i.id}>
-              {i.nombre} ({i.stock}{i.unidad || 'g'} disponible)
+              {i.nombre} ({i.stock} {i.unidad || 'g'} disponible)
             </option>
           ))}
         </select>
@@ -69,7 +81,7 @@ export default function SelectorInsumo({ onAgregarInsumo }) {
 
       <div className="w-32">
         <label className="text-xs text-gray-500 uppercase">
-          Cantidad {seleccionado && `(${insumos.find(i => i.id === parseInt(seleccionado))?.unidad || 'g'})`}
+          Cantidad {seleccionado && `(${unidadActual})`}
         </label>
         <input
           type="number"
