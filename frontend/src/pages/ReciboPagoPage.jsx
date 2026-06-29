@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { apiClient } from '../services/api'
+import { quimicosTexto } from '../utils/quimicosHelper'
 
 function formatFechaLarga(dateStr) {
   if (!dateStr) return ''

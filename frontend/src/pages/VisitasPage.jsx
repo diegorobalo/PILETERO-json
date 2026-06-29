@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiClient } from '../services/api'
+import { parseQuimicos, quimicosTexto } from '../utils/quimicosHelper'
 import TaskChecklist from '../components/TaskChecklist'
 import WaterMeasurement from '../components/WaterMeasurement'
 import DosisCalculadora from '../components/DosisCalculadora'
@@ -27,24 +28,6 @@ function formatFecha(dateStr) {
 function parseTareas(raw) {
   if (!raw) return []
   try { return JSON.parse(raw) } catch { return [] }
-}
-
-function parseQuimicos(raw) {
-  if (!raw) return null
-  try { return JSON.parse(raw) } catch { return null }
-}
-
-function quimicosTexto(q) {
-  if (!q) return '-'
-  const partes = []
-  if (q.cloroGranulado) partes.push(`Cloro granulado: ${q.cloroGranulado}g`)
-  if (q.cloroLiquido) partes.push(`Cloro líquido: ${q.cloroLiquido}ml`)
-  if (q.phMas) partes.push(`pH+: ${q.phMas}g`)
-  if (q.phMenos) partes.push(`pH−: ${q.phMenos}ml`)
-  if (q.algicida) partes.push(`Algicida: ${q.algicida}ml`)
-  if (q.floculante) partes.push(`Floculante: ${q.floculante}ml`)
-  if (q.otros) partes.push(q.otros)
-  return partes.length ? partes.join(' · ') : '-'
 }
 
 export default function VisitasPage() {
@@ -271,7 +254,7 @@ export default function VisitasPage() {
                             </div>
                           </div>
 
-                          {quim && (
+                          {quim && quim.length > 0 && (
                             <div className="mb-4">
                               <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Químicos aplicados</p>
                               <p className="text-sm text-gray-700">{quimicosTexto(quim)}</p>

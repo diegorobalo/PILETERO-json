@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import storageService from '../services/storage'
 import { apiClient } from '../services/api'
+import { parseQuimicos, quimicosLineas } from '../utils/quimicosHelper'
 
 const TASK_LABELS = {
   limpiafondo: 'Pasado de limpiafondo',
@@ -17,12 +18,6 @@ function parseTareas(raw) {
   try { return JSON.parse(raw) } catch { return [] }
 }
 
-function parseQuimicos(raw) {
-  if (!raw) return null
-  if (typeof raw === 'object') return raw
-  try { return JSON.parse(raw) } catch { return null }
-}
-
 function formatFechaLarga(dateStr) {
   if (!dateStr) return ''
   const d = new Date(dateStr + 'T00:00:00')
@@ -30,16 +25,10 @@ function formatFechaLarga(dateStr) {
 }
 
 function buildWhatsAppText(visita, tareas, quim, fotos, tecnico) {
-  const q = quim || {}
-  const quimLineas = [
-    q.cloroGranulado ? `• Cloro granulado: ${q.cloroGranulado}g` : '',
-    q.cloroLiquido ? `• Cloro líquido: ${q.cloroLiquido}ml` : '',
-    q.phMas ? `• pH+: ${q.phMas}g` : '',
-    q.phMenos ? `• pH−: ${q.phMenos}ml` : '',
-    q.algicida ? `• Algicida: ${q.algicida}ml` : '',
-    q.floculante ? `• Floculante: ${q.floculante}ml` : '',
-    q.otros ? `• ${q.otros}` : '',
-  ].filter(Boolean).join('\n')
+  const quimArray = parseQuimicos(quim) || []
+  const quimLineasArr = quimArray.length > 0
+    ? quimicosLineas(quim)
+    : []
 
   const tareasLineas = tareas.map(t => `• ${TASK_LABELS[t] || t}`).join('\n')
 
@@ -57,7 +46,7 @@ ${tareasLineas || '• No registradas'}
 • pH: ${visita.ph ?? '-'}
 
 🧪 *QUÍMICOS APLICADOS*
-${quimLineas || '• Sin registro'}
+${quimLineasArr.length > 0 ? quimLineasArr.join('\n') : '• Sin registro'}
 
 📝 *OBSERVACIONES*
 ${visita.observaciones || 'Sin observaciones'}
@@ -254,17 +243,16 @@ export default function ReporteVisitaPage() {
         </div>
 
         {/* Chemicals */}
-        {quim && (
+        {quim && quim.length > 0 && (
           <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
             <h2 className="text-xs text-gray-400 uppercase tracking-wide font-bold mb-3">🧪 Químicos aplicados</h2>
-            <div className="grid grid-cols-2 gap-x-8 gap-y-1">
-              {quim.cloroGranulado > 0 && <div className="flex justify-between text-sm"><span className="text-gray-600">Cloro granulado</span><strong>{quim.cloroGranulado} g</strong></div>}
-              {quim.cloroLiquido > 0 && <div className="flex justify-between text-sm"><span className="text-gray-600">Cloro líquido</span><strong>{quim.cloroLiquido} ml</strong></div>}
-              {quim.phMas > 0 && <div className="flex justify-between text-sm"><span className="text-gray-600">pH+</span><strong>{quim.phMas} g</strong></div>}
-              {quim.phMenos > 0 && <div className="flex justify-between text-sm"><span className="text-gray-600">pH−</span><strong>{quim.phMenos} ml</strong></div>}
-              {quim.algicida > 0 && <div className="flex justify-between text-sm"><span className="text-gray-600">Algicida</span><strong>{quim.algicida} ml</strong></div>}
-              {quim.floculante > 0 && <div className="flex justify-between text-sm"><span className="text-gray-600">Floculante</span><strong>{quim.floculante} ml</strong></div>}
-              {quim.otros && <div className="flex justify-between text-sm col-span-2"><span className="text-gray-600">Otros</span><strong>{quim.otros}</strong></div>}
+            <div className="space-y-2">
+              {quim.map((item, idx) => (
+                <div key={idx} className="flex justify-between text-sm">
+                  <span className="text-gray-600">{item.nombre}</span>
+                  <strong>{item.cantidad} {item.unidad}</strong>
+                </div>
+              ))}
             </div>
           </div>
         )}
