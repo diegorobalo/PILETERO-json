@@ -29,7 +29,7 @@ export default function FinancePage() {
   const [tab, setTab] = useState('mes')
   const [mes, setMes] = useState(getMesActual())
   const [modalCliente, setModalCliente] = useState(null)
-  const [formPago, setFormPago] = useState({ monto: '', fecha: new Date().toISOString().split('T')[0], metodo_pago: 'efectivo', mes: '' })
+  const [formPago, setFormPago] = useState({ monto: '', fecha: new Date().toISOString().split('T')[0], metodo_pago: 'efectivo', mes: '', tipo_abono: '' })
   const [guardando, setGuardando] = useState(false)
   const [showAumento, setShowAumento] = useState(false)
   const [pctAumento, setPctAumento] = useState('10')
@@ -62,6 +62,7 @@ export default function FinancePage() {
       fecha: new Date().toISOString().split('T')[0],
       metodo_pago: 'efectivo',
       mes: '',
+      tipo_abono: '',
     })
   }
 
@@ -77,6 +78,7 @@ export default function FinancePage() {
         metodo_pago: formPago.metodo_pago,
         estado: 'pagado',
         mes: formPago.mes || null,
+        tipo_abono: formPago.tipo_abono || null,
       })
       await cargar()
       setModalCliente(null)
@@ -97,6 +99,7 @@ export default function FinancePage() {
           metodo_pago: formPago.metodo_pago,
           estado: 'pagado',
           mes: formPago.mes || null,
+          tipo_abono: formPago.tipo_abono || null,
           timestamp: Date.now(),
         })
         localStorage.setItem('piletero_q_pagos', JSON.stringify(q))
@@ -498,6 +501,18 @@ export default function FinancePage() {
                   <option value="Octubre">Octubre</option>
                   <option value="Noviembre">Noviembre</option>
                   <option value="Diciembre">Diciembre</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de abono (opcional)</label>
+                <select value={formPago.tipo_abono}
+                  onChange={e => setFormPago(f => ({ ...f, tipo_abono: e.target.value }))}
+                  className="w-full border border-gray-300 rounded px-3 py-2">
+                  <option value="">— Seleccionar tipo —</option>
+                  <option value="Mano de obra">Mano de obra</option>
+                  <option value="Todo incluido">Todo incluido</option>
+                  <option value="Eventual">Eventual</option>
+                  <option value="Otro">Otro</option>
                 </select>
               </div>
             </div>

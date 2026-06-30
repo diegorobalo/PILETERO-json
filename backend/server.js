@@ -59,6 +59,8 @@ const MIGRATIONS = [
   "ALTER TABLE visitas ADD COLUMN extras JSON DEFAULT '[]'",
   // NUEVA v1.2.1 - Mes field for recibos
   "ALTER TABLE pagos ADD COLUMN mes VARCHAR(20) DEFAULT NULL",
+  // NUEVA v1.2.4 - Tipo de abono field
+  "ALTER TABLE pagos ADD COLUMN tipo_abono VARCHAR(50) DEFAULT NULL",
 ];
 
 db.exec(schema, (err) => {

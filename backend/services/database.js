@@ -356,15 +356,16 @@ class DatabaseService {
   /**
    * Create a new payment record
    */
-  async createPago({ cliente_id, monto, fecha, metodo_pago, estado, mes }) {
-    const sql = `INSERT INTO pagos (cliente_id, monto, fecha, metodo_pago, estado, mes)
-                 VALUES (?, ?, ?, ?, ?, ?)`;
+  async createPago({ cliente_id, monto, fecha, metodo_pago, estado, mes, tipo_abono }) {
+    const sql = `INSERT INTO pagos (cliente_id, monto, fecha, metodo_pago, estado, mes, tipo_abono)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`;
     const result = await this.execute(sql, [
       cliente_id, monto,
       fecha || new Date().toISOString().split('T')[0],
       metodo_pago || 'efectivo',
       estado || 'pagado',
       mes || null,
+      tipo_abono || null,
     ]);
     return this.queryOne('SELECT * FROM pagos WHERE id = ?', [result.lastID]);
   }
@@ -386,7 +387,7 @@ class DatabaseService {
   }
 
   async updatePago(id, data) {
-    const allowed = ['monto', 'fecha', 'metodo_pago', 'estado', 'mes'];
+    const allowed = ['monto', 'fecha', 'metodo_pago', 'estado', 'mes', 'tipo_abono'];
     const updates = [];
     const params = [];
     for (const [key, value] of Object.entries(data)) {
