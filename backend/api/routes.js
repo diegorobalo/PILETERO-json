@@ -340,18 +340,75 @@ router.get('/clientes/:id/fotos-cliente', async (req, res) => {
 /**
  * POST /api/clientes/:id/fotos-cliente
  * body: { tipo, data }  — max 2 fotos por cliente
+ * Validates: cliente exists, max file size (5MB base64), MIME type, max 2 photos per client
  */
 router.post('/clientes/:id/fotos-cliente', async (req, res) => {
   try {
     const clienteId = req.params.id;
     const { tipo, data } = req.body;
-    if (!data) return res.status(400).json({ error: 'data (base64) es requerido' });
+
+    // Validate required fields
+    if (!data) {
+      return res.status(400).json({ error: 'data (base64) es requerido' });
+    }
+
+    // Validate client exists
+    const cliente = await databaseService.getClienteById(clienteId);
+    if (!cliente) {
+      return res.status(404).json({ error: 'Cliente not found' });
+    }
+
+    // Validate base64 data size (5MB max)
+    const MAX_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+    if (data.length > MAX_SIZE) {
+      console.warn(`[fotos-cliente] Base64 data too large: ${(data.length / 1024 / 1024).toFixed(2)}MB exceeds ${MAX_SIZE / 1024 / 1024}MB limit`);
+      return res.status(413).json({
+        error: 'Photo is too large (max 5MB after compression)',
+        size_mb: (data.length / 1024 / 1024).toFixed(2)
+      });
+    }
+
+    // Validate base64 format (should start with data:image/)
+    if (!data.includes('data:image/')) {
+      console.warn('[fotos-cliente] Invalid base64 format - does not start with data:image/');
+      return res.status(400).json({ error: 'Invalid image format. Must be a valid JPEG or PNG.' });
+    }
+
+    // Validate MIME type
+    const validMimes = ['data:image/jpeg', 'data:image/png', 'data:image/webp'];
+    const hasValidMime = validMimes.some(mime => data.startsWith(mime));
+    if (!hasValidMime) {
+      console.warn('[fotos-cliente] Invalid MIME type:', data.substring(0, 30));
+      return res.status(400).json({ error: 'Invalid image format. Only JPEG, PNG, and WebP allowed.' });
+    }
+
+    // Check max photos per client
     const existentes = await databaseService.getFotosCliente(clienteId);
-    if (existentes.length >= 2) return res.status(400).json({ error: 'Máximo 2 fotos por cliente' });
+    if (existentes.length >= 2) {
+      return res.status(400).json({ error: 'Máximo 2 fotos por cliente' });
+    }
+
+    // Save photo
     const foto = await databaseService.saveFotoCliente({ cliente_id: clienteId, tipo, data });
     res.status(201).json(foto);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to save client photo' });
+    console.error('[fotos-cliente POST] Error saving client photo:', {
+      clienteId: req.params.id,
+      tipo: req.body?.tipo,
+      dataLength: req.body?.data?.length,
+      error: error.message,
+      stack: error.stack
+    });
+
+    // Check if error is due to database constraints
+    if (error.message && error.message.includes('UNIQUE constraint failed')) {
+      return res.status(409).json({ error: 'Photo already exists for this type' });
+    }
+    if (error.message && error.message.includes('database')) {
+      return res.status(500).json({ error: 'Database error. Photo data may be corrupted.' });
+    }
+
+    res.status(500).json({ error: 'Failed to save client photo. Please try again.' });
   }
 });
 
