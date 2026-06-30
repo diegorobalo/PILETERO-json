@@ -256,9 +256,7 @@ export default function InventarioPage() {
                       }`}>{m.tipo}</span>
                       <span className="text-sm text-gray-500">{m.fecha}</span>
                       {m.origen === 'visita' && m.referencia_id ? (
-                        <a href={`/visita/${m.referencia_id}`} className="text-sm text-blue-600 hover:text-blue-800 hover:underline ml-2">
-                          Usado en Visita #{m.referencia_id}
-                        </a>
+                        <span className="text-sm text-gray-600 ml-2">· Usado en Visita #{m.referencia_id}</span>
                       ) : (
                         <span className="text-sm text-gray-500 ml-2">· {m.origen}</span>
                       )}
