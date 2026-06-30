@@ -61,3 +61,4 @@ temp/
 *.db
 *.sqlite
 *.sqlite3
+backend/data.json

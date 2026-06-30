@@ -1,10 +1,9 @@
 import express from 'express';
 import cors from 'cors';
-import sqlite3 from 'sqlite3';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cron from 'node-cron';
-import { readFileSync, existsSync, mkdirSync, copyFileSync, readdirSync, unlinkSync, statSync } from 'fs';
+import { readFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { networkInterfaces } from 'os';
@@ -30,64 +29,30 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Initialize SQLite database
-const dbPath = join(__dirname, 'piletero.db');
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Error opening database:', err);
-    process.exit(1);
-  }
-  console.log('Connected to SQLite database at:', dbPath);
-});
+// ==================== START SERVER INITIALIZATION ====================
 
-// Initialize database — schema + migrations — then start server
-const schema = readFileSync(join(__dirname, 'db', 'schema.sql'), 'utf8');
-const MIGRATIONS = [
-  "ALTER TABLE clientes ADD COLUMN frecuencia_visita TEXT DEFAULT 'semanal'",
-  "ALTER TABLE clientes ADD COLUMN grupo_semana TEXT DEFAULT 'A'",
-  "ALTER TABLE clientes ADD COLUMN estado TEXT DEFAULT 'activo'",
-  "CREATE TABLE IF NOT EXISTS fotos_clientes (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente_id INTEGER NOT NULL, tipo TEXT, ruta_archivo TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE)",
-  "CREATE INDEX IF NOT EXISTS idx_fotos_clientes_cliente_id ON fotos_clientes(cliente_id)",
-  "CREATE INDEX IF NOT EXISTS idx_clientes_estado ON clientes(estado)",
-  // NUEVAS v1.1:
-  "CREATE TABLE IF NOT EXISTS configuracion (clave TEXT PRIMARY KEY, valor TEXT)",
-  "CREATE TABLE IF NOT EXISTS gastos (id INTEGER PRIMARY KEY AUTOINCREMENT, descripcion TEXT NOT NULL, monto REAL NOT NULL, fecha DATE NOT NULL, categoria TEXT DEFAULT 'otros', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
-  "CREATE TABLE IF NOT EXISTS movimientos_inventario (id INTEGER PRIMARY KEY AUTOINCREMENT, insumo_id INTEGER NOT NULL, tipo TEXT NOT NULL, cantidad REAL NOT NULL, origen TEXT DEFAULT 'manual', referencia_id INTEGER, fecha DATE NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (insumo_id) REFERENCES inventario(id) ON DELETE CASCADE)",
-  "CREATE INDEX IF NOT EXISTS idx_movimientos_insumo_id ON movimientos_inventario(insumo_id)",
-  "CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha)",
-  // NUEVAS v1.1.1 - Extras/Adicionales
-  "ALTER TABLE visitas ADD COLUMN extras JSON DEFAULT '[]'",
-  // NUEVA v1.2.1 - Mes field for recibos
-  "ALTER TABLE pagos ADD COLUMN mes VARCHAR(20) DEFAULT NULL",
-  // NUEVA v1.2.4 - Tipo de abono field
-  "ALTER TABLE pagos ADD COLUMN tipo_abono VARCHAR(50) DEFAULT NULL",
-];
+const PORT = process.env.PORT || 3000;
 
-db.exec(schema, (err) => {
-  if (err) {
-    console.error('Error initializing database schema:', err);
-    process.exit(1);
-  }
-  console.log('Database schema OK');
-
-  let pending = MIGRATIONS.length;
-  db.serialize(() => {
-    MIGRATIONS.forEach(sql => {
-      db.run(sql, (migErr) => {
-        if (migErr && !migErr.message.includes('duplicate column')) {
-          console.error('Migration warning:', migErr.message);
-        }
-        pending--;
-        if (pending === 0) {
-          console.log('Migrations OK — starting server');
-          databaseService.init(db);
-          syncService.init();
-          startServer();
-        }
-      });
-    });
+function startServer() {
+  server.listen(PORT, '0.0.0.0', () => {
+    const ifaces = Object.values(networkInterfaces()).flat().filter(i => i.family === 'IPv4' && !i.internal);
+    const localIP = ifaces[0]?.address || 'TU_IP';
+    console.log(`\n✅ PILETERO corriendo en http://localhost:${PORT}`);
+    console.log(`📱 Celular: http://${localIP}:${PORT}\n`);
+    console.log('Storage: JSON (data.json) - Vercel compatible\n');
   });
-});
+}
+
+// Initialize JSON-based storage (Vercel-compatible, no SQLite)
+try {
+  databaseService.init();
+  console.log('JSON data storage initialized');
+  syncService.init();
+  startServer();
+} catch (err) {
+  console.error('Error initializing data storage:', err);
+  process.exit(1);
+}
 
 // ==================== REST API ENDPOINTS ====================
 
@@ -102,45 +67,9 @@ app.get('/api/health', (req, res) => {
 // Mount API routes
 app.use('/api', routes);
 
-// ==================== BACKUP AUTOMÁTICO ====================
-
-const backupDir = join(__dirname, 'backups');
-
-function hacerBackup() {
-  try {
-    mkdirSync(backupDir, { recursive: true });
-    const timestamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-    const dest = join(backupDir, `piletero_${timestamp}.db`);
-    copyFileSync(dbPath, dest);
-    console.log(`[backup] Copia guardada: ${dest}`);
-
-    // Mantener solo los últimos 7 backups
-    const archivos = readdirSync(backupDir)
-      .filter(f => f.startsWith('piletero_') && f.endsWith('.db'))
-      .map(f => ({ name: f, time: statSync(join(backupDir, f)).mtimeMs }))
-      .sort((a, b) => b.time - a.time);
-
-    archivos.slice(7).forEach(({ name }) => {
-      try {
-        unlinkSync(join(backupDir, name));
-        console.log(`[backup] Eliminado backup antiguo: ${name}`);
-      } catch (unlinkErr) {
-        console.error(`[backup] No se pudo eliminar ${name}:`, unlinkErr.message);
-      }
-    });
-  } catch (err) {
-    console.error('[backup] Error al hacer backup:', err.message);
-  }
-}
-
-app.post('/api/backup', (req, res) => {
-  try {
-    hacerBackup();
-    res.json({ success: true, message: 'Backup realizado' });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
+// ==================== DATA BACKUP ====================
+// Note: JSON data is automatically persisted in data.json
+// For production (Vercel), consider external backups or database services
 
 // ==================== SOCKET.IO CONNECTION HANDLING ====================
 
@@ -238,9 +167,8 @@ io.on('connection', (socket) => {
       let saved = 0;
       for (const foto of fotos) {
         try {
-          const existing = await databaseService.queryOne(
-            'SELECT id FROM fotos WHERE visita_id = ? AND tipo = ?',
-            [foto.visita_id_server, foto.tipo]
+          const existing = (databaseService.data.fotos || []).find(
+            f => f.visita_id === foto.visita_id_server && f.tipo === foto.tipo
           );
           if (!existing) {
             await databaseService.saveFoto({
@@ -305,48 +233,14 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ==================== START SERVER ====================
-
-const PORT = process.env.PORT || 3000;
-function startServer() {
-  server.listen(PORT, '0.0.0.0', () => {
-    const ifaces = Object.values(networkInterfaces()).flat().filter(i => i.family === 'IPv4' && !i.internal);
-    const localIP = ifaces[0]?.address || 'TU_IP';
-    console.log(`\n✅ PILETERO corriendo en http://localhost:${PORT}`);
-    console.log(`📱 Celular: http://${localIP}:${PORT}\n`);
-  });
-
-  // Backup diario a las 20:00
-  cron.schedule('0 20 * * *', hacerBackup);
-  console.log('[backup] Backup automático programado para las 20:00 diarias');
-
-  // Mostrar fecha del último backup
-  try {
-    mkdirSync(backupDir, { recursive: true });
-    const archivosExistentes = readdirSync(backupDir)
-      .filter(f => f.startsWith('piletero_') && f.endsWith('.db'))
-      .sort()
-      .reverse();
-    if (archivosExistentes.length > 0) {
-      console.log(`[backup] Último backup: ${archivosExistentes[0]}`);
-    } else {
-      console.log('[backup] No hay backups previos. Se creará el primero a las 20:00.');
-    }
-  } catch (err) {
-    console.error('[backup] Error al verificar backups existentes:', err.message);
-  }
-}
 
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\nShutting down gracefully...');
   server.close(() => {
-    db.close((err) => {
-      if (err) console.error('Error closing database:', err);
-      else console.log('Database connection closed');
-      process.exit(0);
-    });
+    console.log('Server closed');
+    process.exit(0);
   });
 });
 
-export { app, server, io, db, databaseService, syncService };
+export { app, server, io, databaseService, syncService };

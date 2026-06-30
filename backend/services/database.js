@@ -1,78 +1,318 @@
-import Database from 'sqlite3';
-import { promisify } from 'util';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
- * DatabaseService - Wrapper around SQLite database operations
- * Provides promise-based methods for database queries and CRUD operations
+ * DatabaseService - JSON file-based storage for Vercel deployment
+ * Provides same promise-based API as SQLite version but stores data in data.json
+ * Maintains backward compatibility - no frontend changes needed
  */
 class DatabaseService {
-  constructor(dbPath) {
-    this.dbPath = dbPath;
-    this.db = null;
+  constructor(dataPath) {
+    this.dataPath = dataPath;
+    this.data = null;
+    this.nextIds = {}; // Track next ID for each table
   }
 
   /**
-   * Initialize database connection
+   * Load data from JSON file (initialization)
    */
-  init(db) {
-    this.db = db;
+  init() {
+    try {
+      if (existsSync(this.dataPath)) {
+        const content = readFileSync(this.dataPath, 'utf8');
+        this.data = JSON.parse(content);
+      } else {
+        // Create default structure if file doesn't exist
+        this.data = {
+          clientes: [],
+          visitas: [],
+          inventario: [],
+          pagos: [],
+          gastos: [],
+          configuracion: [],
+          movimientos_inventario: [],
+          fotos: [],
+          fotos_clientes: []
+        };
+        this.save();
+      }
+
+      // Initialize nextIds trackers
+      this._initializeIds();
+      console.log('JSON data storage initialized:', this.dataPath);
+    } catch (err) {
+      console.error('Error initializing JSON storage:', err);
+      throw err;
+    }
   }
 
   /**
-   * Promise wrapper for db.all (multiple rows)
+   * Initialize ID counters based on existing data
+   */
+  _initializeIds() {
+    const tables = ['clientes', 'visitas', 'inventario', 'pagos', 'gastos', 'configuracion', 'movimientos_inventario', 'fotos', 'fotos_clientes'];
+    for (const table of tables) {
+      const items = this.data[table] || [];
+      const maxId = items.reduce((max, item) => Math.max(max, item.id || 0), 0);
+      this.nextIds[table] = maxId + 1;
+    }
+  }
+
+  /**
+   * Save data to JSON file
+   */
+  save() {
+    try {
+      writeFileSync(this.dataPath, JSON.stringify(this.data, null, 2), 'utf8');
+      console.log(`[db-save] Persisted data to ${this.dataPath}`);
+    } catch (err) {
+      console.error('[db-save-error] Error saving JSON data:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Filter array by conditions (mimics SQL WHERE)
+   */
+  _filterRecords(array, conditions) {
+    if (!conditions || Object.keys(conditions).length === 0) {
+      return array;
+    }
+    return array.filter(record => {
+      return Object.entries(conditions).every(([key, value]) => {
+        if (typeof value === 'string' && value.includes('%')) {
+          // Handle LIKE queries
+          const pattern = value.replace(/%/g, '').toLowerCase();
+          return String(record[key] || '').toLowerCase().includes(pattern);
+        }
+        return record[key] === value;
+      });
+    });
+  }
+
+  /**
+   * SQL-like query interface (filtered array)
    */
   query(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.all(sql, params, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows || []);
-      });
+    return new Promise((resolve) => {
+      try {
+        // Parse SQL to determine table and WHERE conditions
+        const tableMatch = sql.match(/FROM\s+(\w+)/i);
+        const tableName = tableMatch ? tableMatch[1] : null;
+
+        if (!tableName || !this.data[tableName]) {
+          resolve([]);
+          return;
+        }
+
+        let results = [...this.data[tableName]];
+
+        // Simple ORDER BY handling
+        if (sql.includes('ORDER BY')) {
+          const orderMatch = sql.match(/ORDER BY\s+(\w+(?:\.\w+)?)\s*(DESC|ASC)?/i);
+          if (orderMatch) {
+            const field = orderMatch[1].split('.').pop();
+            const direction = orderMatch[2]?.toUpperCase() === 'DESC' ? -1 : 1;
+            results.sort((a, b) => {
+              const aVal = a[field];
+              const bVal = b[field];
+              if (aVal < bVal) return -1 * direction;
+              if (aVal > bVal) return 1 * direction;
+              return 0;
+            });
+          }
+        }
+
+        // Simple LIMIT handling
+        if (sql.includes('LIMIT')) {
+          const limitMatch = sql.match(/LIMIT\s+\?/i);
+          if (limitMatch && params.length > 0) {
+            results = results.slice(0, params[params.length - 1]);
+          }
+        }
+
+        resolve(results);
+      } catch (err) {
+        console.error('Query error:', err);
+        resolve([]);
+      }
     });
   }
 
   /**
-   * Promise wrapper for db.get (single row)
+   * SQL-like queryOne interface (single record)
    */
   queryOne(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.get(sql, params, (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
+    return new Promise((resolve) => {
+      try {
+        // Parse table and WHERE
+        const tableMatch = sql.match(/FROM\s+(\w+)/i);
+        const tableName = tableMatch ? tableMatch[1] : null;
+
+        if (!tableName || !this.data[tableName]) {
+          resolve(null);
+          return;
+        }
+
+        // Extract WHERE conditions from SQL
+        let records = [...this.data[tableName]];
+
+        // Handle simple WHERE id = ? pattern
+        if (sql.includes('WHERE id = ?')) {
+          const record = records.find(r => r.id === params[0]);
+          resolve(record || null);
+          return;
+        }
+
+        // Handle other WHERE patterns
+        if (sql.includes('WHERE')) {
+          const whereMatch = sql.match(/WHERE\s+(.+?)(?:LIMIT|ORDER BY|$)/i);
+          if (whereMatch) {
+            const whereClause = whereMatch[1].trim();
+
+            // Simple pattern matching for common WHERE conditions
+            if (whereClause.includes('LIKE')) {
+              const likeMatch = whereClause.match(/(\w+)\s+LIKE\s+\?/i);
+              if (likeMatch && params.length > 0) {
+                const field = likeMatch[1];
+                const pattern = params[0].replace(/%/g, '').toLowerCase();
+                const record = records.find(r =>
+                  String(r[field] || '').toLowerCase().includes(pattern)
+                );
+                resolve(record || null);
+                return;
+              }
+            }
+          }
+        }
+
+        resolve(records[0] || null);
+      } catch (err) {
+        console.error('QueryOne error:', err);
+        resolve(null);
+      }
     });
   }
 
   /**
-   * Promise wrapper for db.run (insert, update, delete)
+   * SQL-like execute interface (INSERT/UPDATE/DELETE)
    */
   execute(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.run(sql, params, function(err) {
-        if (err) reject(err);
-        else resolve({ lastID: this.lastID, changes: this.changes });
-      });
+    return new Promise((resolve) => {
+      try {
+        // Handle INSERT
+        if (sql.includes('INSERT INTO')) {
+          const tableMatch = sql.match(/INSERT INTO\s+(\w+)/i);
+          const tableName = tableMatch ? tableMatch[1] : null;
+
+          if (tableName && this.data[tableName]) {
+            const id = this.nextIds[tableName]++;
+            const columnsMatch = sql.match(/\((.*?)\)\s*VALUES/i);
+            const columns = columnsMatch ? columnsMatch[1].split(',').map(c => c.trim()) : [];
+
+            const record = { id };
+            columns.forEach((col, idx) => {
+              record[col] = params[idx];
+            });
+
+            // Set timestamps
+            record.created_at = new Date().toISOString();
+            record.updated_at = new Date().toISOString();
+
+            this.data[tableName].push(record);
+            this.save();
+
+            resolve({ lastID: id, changes: 1 });
+            return;
+          }
+        }
+
+        // Handle UPDATE
+        if (sql.includes('UPDATE')) {
+          const tableMatch = sql.match(/UPDATE\s+(\w+)/i);
+          const tableName = tableMatch ? tableMatch[1] : null;
+
+          if (tableName && this.data[tableName]) {
+            // Extract SET clause
+            const setMatch = sql.match(/SET\s+(.+?)\s+WHERE/i);
+            if (!setMatch) {
+              resolve({ lastID: null, changes: 0 });
+              return;
+            }
+
+            const setClauses = setMatch[1].split(',').map(c => c.trim());
+            const updateFields = {};
+
+            let paramIdx = 0;
+            for (const clause of setClauses) {
+              if (clause.includes('=')) {
+                const [field] = clause.split('=').map(c => c.trim());
+                if (field !== 'updated_at') {
+                  updateFields[field] = params[paramIdx++];
+                }
+              }
+            }
+
+            // Extract WHERE condition (id = ?)
+            const whereMatch = sql.match(/WHERE\s+id\s*=\s*\?/i);
+            if (whereMatch) {
+              const id = params[params.length - 1];
+              const recordIdx = this.data[tableName].findIndex(r => r.id === id);
+
+              if (recordIdx >= 0) {
+                Object.assign(this.data[tableName][recordIdx], updateFields, {
+                  updated_at: new Date().toISOString()
+                });
+                this.save();
+                resolve({ lastID: id, changes: 1 });
+                return;
+              }
+            }
+          }
+        }
+
+        // Handle DELETE
+        if (sql.includes('DELETE')) {
+          const tableMatch = sql.match(/DELETE FROM\s+(\w+)/i);
+          const tableName = tableMatch ? tableMatch[1] : null;
+
+          if (tableName && this.data[tableName]) {
+            const whereMatch = sql.match(/WHERE\s+id\s*=\s*\?/i);
+            if (whereMatch && params.length > 0) {
+              const id = params[0];
+              const beforeLen = this.data[tableName].length;
+              this.data[tableName] = this.data[tableName].filter(r => r.id !== id);
+              const changes = beforeLen - this.data[tableName].length;
+              this.save();
+              resolve({ lastID: null, changes });
+              return;
+            }
+          }
+        }
+
+        resolve({ lastID: null, changes: 0 });
+      } catch (err) {
+        console.error('Execute error:', err);
+        resolve({ lastID: null, changes: 0 });
+      }
     });
   }
 
   // ==================== CLIENTES (Clients) ====================
 
-  /**
-   * Get all clients (both active and suspended)
-   */
   async getAllClientes() {
-    return this.query('SELECT * FROM clientes ORDER BY nombre');
+    const clientes = this.data.clientes || [];
+    return clientes.sort((a, b) => a.nombre.localeCompare(b.nombre));
   }
 
-  /**
-   * Get client by ID
-   */
   async getClienteById(id) {
-    return this.queryOne('SELECT * FROM clientes WHERE id = ?', [id]);
+    return (this.data.clientes || []).find(c => c.id === id) || null;
   }
 
-  /**
-   * Create a new client
-   */
   async createCliente(data) {
     const {
       nombre,
@@ -90,38 +330,33 @@ class DatabaseService {
       notas_acceso
     } = data;
 
-    const sql = `
-      INSERT INTO clientes (
-        nombre, direccion, telefono, volumen_litros, tipo_construccion,
-        equipamiento, modelo_filtro, tipo_abono, precio_abono,
-        dias_visita, frecuencia_visita, grupo_semana, notas_acceso
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const params = [
+    const id = this.nextIds.clientes++;
+    const cliente = {
+      id,
       nombre,
-      direccion || null,
-      telefono || null,
-      volumen_litros || null,
-      tipo_construccion || null,
-      equipamiento || null,
-      modelo_filtro || null,
-      tipo_abono || null,
-      precio_abono || null,
-      dias_visita || null,
-      frecuencia_visita || 'semanal',
-      grupo_semana || 'A',
-      notas_acceso || null
-    ];
+      direccion: direccion || null,
+      telefono: telefono || null,
+      volumen_litros: volumen_litros || null,
+      tipo_construccion: tipo_construccion || null,
+      equipamiento: equipamiento || null,
+      modelo_filtro: modelo_filtro || null,
+      tipo_abono: tipo_abono || null,
+      precio_abono: precio_abono || null,
+      dias_visita: dias_visita || null,
+      frecuencia_visita: frecuencia_visita || 'semanal',
+      grupo_semana: grupo_semana || 'A',
+      notas_acceso: notas_acceso || null,
+      activo: 1,
+      estado: 'activo',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
 
-    const result = await this.execute(sql, params);
-    return this.getClienteById(result.lastID);
+    this.data.clientes.push(cliente);
+    this.save();
+    return cliente;
   }
 
-  /**
-   * Update client information
-   */
   async updateCliente(id, data) {
     const allowedFields = [
       'nombre',
@@ -140,90 +375,106 @@ class DatabaseService {
       'activo'
     ];
 
-    const updates = [];
-    const params = [];
+    const clienteIdx = this.data.clientes.findIndex(c => c.id === id);
+    if (clienteIdx < 0) return null;
 
     for (const [key, value] of Object.entries(data)) {
       if (allowedFields.includes(key)) {
-        updates.push(`${key} = ?`);
-        params.push(value);
+        this.data.clientes[clienteIdx][key] = value;
       }
     }
 
-    if (updates.length === 0) return this.getClienteById(id);
-
-    params.push(id);
-    const sql = `UPDATE clientes SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
-
-    await this.execute(sql, params);
-    return this.getClienteById(id);
+    this.data.clientes[clienteIdx].updated_at = new Date().toISOString();
+    this.save();
+    return this.data.clientes[clienteIdx];
   }
 
-  /**
-   * Suspend a client (mark as suspendido)
-   */
   async suspenderCliente(id) {
-    const sql = `UPDATE clientes SET estado = 'suspendido', updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
-    await this.execute(sql, [id]);
-    return this.getClienteById(id);
+    const clienteIdx = this.data.clientes.findIndex(c => c.id === id);
+    if (clienteIdx < 0) return null;
+
+    this.data.clientes[clienteIdx].estado = 'suspendido';
+    this.data.clientes[clienteIdx].updated_at = new Date().toISOString();
+    this.save();
+    return this.data.clientes[clienteIdx];
   }
 
-  /**
-   * Reactivate a suspended client (mark as activo)
-   */
   async reactivarCliente(id) {
-    const sql = `UPDATE clientes SET estado = 'activo', updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
-    await this.execute(sql, [id]);
-    return this.getClienteById(id);
+    const clienteIdx = this.data.clientes.findIndex(c => c.id === id);
+    if (clienteIdx < 0) return null;
+
+    this.data.clientes[clienteIdx].estado = 'activo';
+    this.data.clientes[clienteIdx].updated_at = new Date().toISOString();
+    this.save();
+    return this.data.clientes[clienteIdx];
   }
 
   // ==================== FOTOS (Photos) ====================
 
   async getFotosByVisita(visitaId) {
-    return this.query('SELECT * FROM fotos WHERE visita_id = ?', [visitaId]);
+    return (this.data.fotos || []).filter(f => f.visita_id === visitaId);
   }
 
   async saveFoto({ visita_id, tipo, data }) {
-    // ruta_archivo stores base64 data for photos synced from mobile
-    const sql = 'INSERT INTO fotos (visita_id, tipo, ruta_archivo) VALUES (?, ?, ?)';
-    const result = await this.execute(sql, [visita_id, tipo || 'general', data]);
-    return result.lastID;
+    const id = this.nextIds.fotos++;
+    const foto = {
+      id,
+      visita_id,
+      tipo: tipo || 'general',
+      ruta_archivo: data,
+      uploaded_at: new Date().toISOString()
+    };
+
+    this.data.fotos.push(foto);
+    this.save();
+    return id;
   }
 
   // ==================== VISITAS (Visits) ====================
 
-  /**
-   * Get visits for a specific client
-   */
   async getAllVisitas(limit = 200) {
-    return this.query(
-      `SELECT v.*, c.nombre as cliente_nombre, c.direccion as cliente_direccion
-       FROM visitas v LEFT JOIN clientes c ON v.cliente_id = c.id
-       ORDER BY v.fecha DESC, v.created_at DESC LIMIT ?`,
-      [limit]
-    );
+    let visitas = this.data.visitas || [];
+
+    // Enrich with client info (join)
+    visitas = visitas.map(v => {
+      const cliente = (this.data.clientes || []).find(c => c.id === v.cliente_id);
+      return {
+        ...v,
+        cliente_nombre: cliente?.nombre,
+        cliente_direccion: cliente?.direccion
+      };
+    });
+
+    // Sort by date DESC
+    visitas.sort((a, b) => {
+      const aDate = new Date(b.fecha || 0);
+      const bDate = new Date(a.fecha || 0);
+      return aDate - bDate;
+    });
+
+    return visitas.slice(0, limit);
   }
 
   async getVisitasByCliente(clienteId) {
-    return this.query(
-      'SELECT * FROM visitas WHERE cliente_id = ? ORDER BY fecha DESC',
-      [clienteId]
-    );
+    const visitas = (this.data.visitas || []).filter(v => v.cliente_id === clienteId);
+    visitas.sort((a, b) => {
+      const aDate = new Date(b.fecha || 0);
+      const bDate = new Date(a.fecha || 0);
+      return aDate - bDate;
+    });
+    return visitas;
   }
 
-  /**
-   * Get visits for a specific date
-   */
   async getVisitasByFecha(fecha) {
-    return this.query(
-      'SELECT * FROM visitas WHERE fecha = ? ORDER BY hora_inicio',
-      [fecha]
-    );
+    const visitas = (this.data.visitas || []).filter(v => v.fecha === fecha);
+    visitas.sort((a, b) => {
+      const aTime = a.hora_inicio || '00:00';
+      const bTime = b.hora_inicio || '00:00';
+      return aTime.localeCompare(bTime);
+    });
+    return visitas;
   }
 
-  /**
-   * Create a new visit record
-   */
   async createVisita(data) {
     const {
       cliente_id,
@@ -238,28 +489,25 @@ class DatabaseService {
       extras
     } = data;
 
-    const sql = `
-      INSERT INTO visitas (
-        cliente_id, fecha, hora_inicio, hora_fin, tareas_realizadas,
-        cloro_ppm, ph, quimicos_usados, observaciones, extras
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const params = [
+    const id = this.nextIds.visitas++;
+    const visita = {
+      id,
       cliente_id,
       fecha,
-      hora_inicio || null,
-      hora_fin || null,
-      typeof tareas_realizadas === 'string' ? tareas_realizadas : (tareas_realizadas ? JSON.stringify(tareas_realizadas) : null),
-      cloro_ppm || null,
-      ph || null,
-      typeof quimicos_usados === 'string' ? quimicos_usados : (quimicos_usados ? JSON.stringify(quimicos_usados) : null),
-      observaciones || null,
-      typeof extras === 'string' ? extras : (extras ? JSON.stringify(extras) : JSON.stringify([]))
-    ];
+      hora_inicio: hora_inicio || null,
+      hora_fin: hora_fin || null,
+      tareas_realizadas: typeof tareas_realizadas === 'string' ? tareas_realizadas : (tareas_realizadas ? JSON.stringify(tareas_realizadas) : null),
+      cloro_ppm: cloro_ppm || null,
+      ph: ph || null,
+      quimicos_usados: typeof quimicos_usados === 'string' ? quimicos_usados : (quimicos_usados ? JSON.stringify(quimicos_usados) : null),
+      observaciones: observaciones || null,
+      extras: typeof extras === 'string' ? extras : (extras ? JSON.stringify(extras) : JSON.stringify([])),
+      sincronizada: 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
 
-    const result = await this.execute(sql, params);
+    this.data.visitas.push(visita);
 
     // Auto-descuento de inventario basado en quimicos usados
     const quimicosRaw = typeof quimicos_usados === 'string'
@@ -279,21 +527,20 @@ class DatabaseService {
       const cant = parseFloat(quimicosRaw[clave]);
       if (!cant || cant <= 0) continue;
       try {
-        const insumo = await this.queryOne(
-          "SELECT id FROM inventario WHERE LOWER(nombre) LIKE ? LIMIT 1",
-          [`%${nombre}%`]
+        const insumo = (this.data.inventario || []).find(i =>
+          i.nombre.toLowerCase().includes(nombre.toLowerCase())
         );
         if (!insumo) continue;
-        await this.execute(
-          'UPDATE inventario SET stock_actual = MAX(0, stock_actual - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-          [cant, insumo.id]
-        );
+
+        insumo.stock_actual = Math.max(0, insumo.stock_actual - cant);
+        insumo.updated_at = new Date().toISOString();
+
         await this.registrarMovimiento({
           insumo_id: insumo.id,
           tipo: 'uso',
           cantidad: -cant,
           origen: 'visita',
-          referencia_id: result.lastID,
+          referencia_id: id,
           fecha: fecha,
         });
       } catch (err) {
@@ -301,12 +548,10 @@ class DatabaseService {
       }
     }
 
-    return this.queryOne('SELECT * FROM visitas WHERE id = ?', [result.lastID]);
+    this.save();
+    return visita;
   }
 
-  /**
-   * Update visit record
-   */
   async updateVisita(id, data) {
     const allowedFields = [
       'hora_inicio',
@@ -319,155 +564,200 @@ class DatabaseService {
       'sincronizada'
     ];
 
-    const updates = [];
-    const params = [];
+    const visitaIdx = this.data.visitas.findIndex(v => v.id === id);
+    if (visitaIdx < 0) return null;
 
     for (const [key, value] of Object.entries(data)) {
       if (allowedFields.includes(key)) {
-        updates.push(`${key} = ?`);
-
-        // Handle JSON fields
         if (key === 'tareas_realizadas' || key === 'quimicos_usados') {
-          params.push(typeof value === 'string' ? value : (value ? JSON.stringify(value) : null));
+          this.data.visitas[visitaIdx][key] = typeof value === 'string' ? value : (value ? JSON.stringify(value) : null);
         } else {
-          params.push(value);
+          this.data.visitas[visitaIdx][key] = value;
         }
       }
     }
 
-    if (updates.length === 0) return this.queryOne('SELECT * FROM visitas WHERE id = ?', [id]);
-
-    params.push(id);
-    const sql = `UPDATE visitas SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
-
-    await this.execute(sql, params);
-    return this.queryOne('SELECT * FROM visitas WHERE id = ?', [id]);
+    this.data.visitas[visitaIdx].updated_at = new Date().toISOString();
+    this.save();
+    return this.data.visitas[visitaIdx];
   }
 
-  /**
-   * Delete a visit record
-   */
   async deleteVisita(id) {
-    await this.execute('DELETE FROM visitas WHERE id = ?', [id]);
+    this.data.visitas = (this.data.visitas || []).filter(v => v.id !== id);
+    this.save();
   }
 
   // ==================== PAGOS (Payments) ====================
 
-  /**
-   * Create a new payment record
-   */
   async createPago({ cliente_id, monto, fecha, metodo_pago, estado, mes, tipo_abono }) {
-    const sql = `INSERT INTO pagos (cliente_id, monto, fecha, metodo_pago, estado, mes, tipo_abono)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`;
-    const result = await this.execute(sql, [
-      cliente_id, monto,
-      fecha || new Date().toISOString().split('T')[0],
-      metodo_pago || 'efectivo',
-      estado || 'pagado',
-      mes || null,
-      tipo_abono || null,
-    ]);
-    return this.queryOne('SELECT * FROM pagos WHERE id = ?', [result.lastID]);
+    const id = this.nextIds.pagos++;
+    const pago = {
+      id,
+      cliente_id,
+      monto,
+      fecha: fecha || new Date().toISOString().split('T')[0],
+      metodo_pago: metodo_pago || 'efectivo',
+      estado: estado || 'pagado',
+      mes: mes || null,
+      tipo_abono: tipo_abono || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    this.data.pagos.push(pago);
+    this.save();
+    return pago;
   }
 
   async getAllPagos(limit = 500) {
-    return this.query(
-      `SELECT p.*, c.nombre as cliente_nombre, c.direccion as cliente_direccion
-       FROM pagos p LEFT JOIN clientes c ON p.cliente_id = c.id
-       ORDER BY p.fecha DESC, p.created_at DESC LIMIT ?`,
-      [limit]
-    );
+    let pagos = this.data.pagos || [];
+
+    // Enrich with client info
+    pagos = pagos.map(p => {
+      const cliente = (this.data.clientes || []).find(c => c.id === p.cliente_id);
+      return {
+        ...p,
+        cliente_nombre: cliente?.nombre,
+        cliente_direccion: cliente?.direccion
+      };
+    });
+
+    // Sort by date DESC
+    pagos.sort((a, b) => {
+      const aDate = new Date(b.fecha || 0);
+      const bDate = new Date(a.fecha || 0);
+      return aDate - bDate;
+    });
+
+    return pagos.slice(0, limit);
   }
 
   async getPagosByCliente(clienteId) {
-    return this.query(
-      'SELECT * FROM pagos WHERE cliente_id = ? ORDER BY fecha DESC',
-      [clienteId]
-    );
+    const pagos = (this.data.pagos || []).filter(p => p.cliente_id === clienteId);
+    pagos.sort((a, b) => {
+      const aDate = new Date(b.fecha || 0);
+      const bDate = new Date(a.fecha || 0);
+      return aDate - bDate;
+    });
+    return pagos;
   }
 
   async updatePago(id, data) {
     const allowed = ['monto', 'fecha', 'metodo_pago', 'estado', 'mes', 'tipo_abono'];
-    const updates = [];
-    const params = [];
+
+    const pagoIdx = this.data.pagos.findIndex(p => p.id === id);
+    if (pagoIdx < 0) return null;
+
     for (const [key, value] of Object.entries(data)) {
       if (allowed.includes(key)) {
-        updates.push(`${key} = ?`);
-        params.push(value);
+        this.data.pagos[pagoIdx][key] = value;
       }
     }
-    if (!updates.length) return this.queryOne('SELECT * FROM pagos WHERE id = ?', [id]);
-    params.push(id);
-    await this.execute(`UPDATE pagos SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, params);
-    return this.queryOne('SELECT * FROM pagos WHERE id = ?', [id]);
+
+    this.data.pagos[pagoIdx].updated_at = new Date().toISOString();
+    this.save();
+    return this.data.pagos[pagoIdx];
   }
 
   async deletePago(id) {
-    await this.execute('DELETE FROM pagos WHERE id = ?', [id]);
+    this.data.pagos = (this.data.pagos || []).filter(p => p.id !== id);
+    this.save();
   }
 
   // ==================== FOTOS CLIENTES ====================
 
   async getFotosCliente(clienteId) {
-    return this.query('SELECT * FROM fotos_clientes WHERE cliente_id = ? ORDER BY created_at', [clienteId]);
+    return (this.data.fotos_clientes || []).filter(f => f.cliente_id === clienteId);
   }
 
   async saveFotoCliente({ cliente_id, tipo, data }) {
-    const result = await this.execute(
-      'INSERT INTO fotos_clientes (cliente_id, tipo, ruta_archivo) VALUES (?, ?, ?)',
-      [cliente_id, tipo || null, data]
-    );
-    return this.queryOne('SELECT * FROM fotos_clientes WHERE id = ?', [result.lastID]);
+    const id = this.nextIds.fotos_clientes++;
+    const foto = {
+      id,
+      cliente_id,
+      tipo: tipo || null,
+      ruta_archivo: data,
+      created_at: new Date().toISOString()
+    };
+
+    this.data.fotos_clientes.push(foto);
+    this.save();
+    return foto;
   }
 
   async deleteFotoCliente(id) {
-    await this.execute('DELETE FROM fotos_clientes WHERE id = ?', [id]);
+    this.data.fotos_clientes = (this.data.fotos_clientes || []).filter(f => f.id !== id);
+    this.save();
   }
 
   async aumentoPreciosMasivo(porcentaje) {
-    const sql = `UPDATE clientes SET precio_abono = ROUND(precio_abono * (1.0 + ? / 100.0)), updated_at = CURRENT_TIMESTAMP
-                 WHERE activo = 1 AND estado = 'activo' AND precio_abono IS NOT NULL AND precio_abono > 0`
-    const result = await this.execute(sql, [porcentaje])
-    return { updated: result.changes }
+    let updated = 0;
+    for (const cliente of this.data.clientes || []) {
+      if (cliente.activo && cliente.estado === 'activo' && cliente.precio_abono && cliente.precio_abono > 0) {
+        cliente.precio_abono = Math.round(cliente.precio_abono * (1.0 + porcentaje / 100.0));
+        cliente.updated_at = new Date().toISOString();
+        updated++;
+      }
+    }
+    this.save();
+    return { updated };
   }
 
   // ==================== INVENTARIO ====================
 
   async getAllInventario() {
-    return this.query('SELECT * FROM inventario ORDER BY nombre');
+    const inventario = this.data.inventario || [];
+    return inventario.sort((a, b) => a.nombre.localeCompare(b.nombre));
   }
 
   async getInventarioById(id) {
-    return this.queryOne('SELECT * FROM inventario WHERE id = ?', [id]);
+    return (this.data.inventario || []).find(i => i.id === id) || null;
   }
 
   async createInventario(data) {
     const { nombre, unidad, stock_actual, stock_minimo, precio_unitario } = data;
-    const result = await this.execute(
-      'INSERT INTO inventario (nombre, unidad, stock_actual, stock_minimo, precio_unitario) VALUES (?, ?, ?, ?, ?)',
-      [nombre, unidad || 'g', stock_actual || 0, stock_minimo || 0, precio_unitario || null]
-    );
-    return this.getInventarioById(result.lastID);
+
+    const id = this.nextIds.inventario++;
+    const item = {
+      id,
+      nombre,
+      unidad: unidad || 'g',
+      stock_actual: stock_actual || 0,
+      stock_minimo: stock_minimo || 0,
+      precio_unitario: precio_unitario || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    this.data.inventario.push(item);
+    this.save();
+    return item;
   }
 
   async updateInventario(id, data) {
     const allowed = ['nombre', 'unidad', 'stock_actual', 'stock_minimo', 'precio_unitario'];
-    const updates = [];
-    const params = [];
+
+    const itemIdx = this.data.inventario.findIndex(i => i.id === id);
+    if (itemIdx < 0) return null;
+
     for (const [key, value] of Object.entries(data)) {
-      if (allowed.includes(key)) { updates.push(`${key} = ?`); params.push(value); }
+      if (allowed.includes(key)) {
+        this.data.inventario[itemIdx][key] = value;
+      }
     }
-    if (!updates.length) return this.getInventarioById(id);
-    params.push(id);
-    await this.execute(`UPDATE inventario SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, params);
-    return this.getInventarioById(id);
+
+    this.data.inventario[itemIdx].updated_at = new Date().toISOString();
+    this.save();
+    return this.data.inventario[itemIdx];
   }
 
   async ajustarStock(id, cantidad, visita_id = null) {
-    await this.execute(
-      'UPDATE inventario SET stock_actual = MAX(0, stock_actual + ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [cantidad, id]
-    );
+    const itemIdx = this.data.inventario.findIndex(i => i.id === id);
+    if (itemIdx < 0) return null;
+
+    this.data.inventario[itemIdx].stock_actual = Math.max(0, this.data.inventario[itemIdx].stock_actual + cantidad);
+    this.data.inventario[itemIdx].updated_at = new Date().toISOString();
+
     await this.registrarMovimiento({
       insumo_id: id,
       tipo: cantidad > 0 ? 'compra' : 'uso',
@@ -476,23 +766,21 @@ class DatabaseService {
       visita_id: visita_id,
       fecha: new Date().toISOString().split('T')[0],
     });
-    return this.getInventarioById(id);
+
+    this.save();
+    return this.data.inventario[itemIdx];
   }
 
-  // Convierte formato viejo {cloroGranulado: 100, ...} a array dinámico
-  // Si ya es array, retorna as-is. Backward-compatible para visitas antiguas.
   parseQuimicos(raw) {
-    if (!raw) return []
+    if (!raw) return [];
 
     try {
-      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
 
-      // Si ya es array, retorna como está
-      if (Array.isArray(parsed)) return parsed
+      if (Array.isArray(parsed)) return parsed;
 
-      // Si es objeto viejo, convierte a array
-      const viejo = parsed
-      const nuevo = []
+      const viejo = parsed;
+      const nuevo = [];
 
       const MAPPING = {
         cloroGranulado: { id: 1, nombre: 'Cloro Granulado', unidad: 'g' },
@@ -501,7 +789,7 @@ class DatabaseService {
         phMenos: { id: 4, nombre: 'pH−', unidad: 'ml' },
         algicida: { id: 5, nombre: 'Algicida', unidad: 'ml' },
         floculante: { id: 6, nombre: 'Floculante', unidad: 'ml' },
-      }
+      };
 
       for (const [clave, info] of Object.entries(MAPPING)) {
         if (viejo[clave] && viejo[clave] > 0) {
@@ -510,112 +798,141 @@ class DatabaseService {
             nombre: info.nombre,
             cantidad: viejo[clave],
             unidad: info.unidad,
-          })
+          });
         }
       }
 
-      return nuevo
+      return nuevo;
     } catch (e) {
-      console.error('[database] parseQuimicos error:', e.message)
-      return []
+      console.error('[database] parseQuimicos error:', e.message);
+      return [];
     }
   }
 
-  // Valida stock pero NO bloquea. Retorna {hasStock: bool, stockDisponible: number}
   validateInsumoStock(insumo_id, cantidad) {
-    return new Promise((resolve, reject) => {
-      const sql = 'SELECT stock_actual as stock FROM inventario WHERE id = ?'
-      this.db.get(sql, [insumo_id], (err, row) => {
-        if (err) return reject(err)
-        if (!row) return resolve({ hasStock: false, stockDisponible: 0, error: 'Insumo no existe' })
-
-        const hasStock = row.stock >= cantidad
-        resolve({ hasStock, stockDisponible: row.stock })
-      })
-    })
+    return new Promise((resolve) => {
+      const insumo = (this.data.inventario || []).find(i => i.id === insumo_id);
+      if (!insumo) {
+        resolve({ hasStock: false, stockDisponible: 0, error: 'Insumo no existe' });
+      } else {
+        const hasStock = insumo.stock_actual >= cantidad;
+        resolve({ hasStock, stockDisponible: insumo.stock_actual });
+      }
+    });
   }
 
   async deleteInventario(id) {
-    return this.execute('DELETE FROM inventario WHERE id = ?', [id]);
+    this.data.inventario = (this.data.inventario || []).filter(i => i.id !== id);
+    this.save();
   }
 
   // ==================== MOVIMIENTOS INVENTARIO ====================
 
   async registrarMovimiento({ insumo_id, tipo, cantidad, origen, referencia_id, visita_id, fecha }) {
-    // If visita_id is provided, store it in referencia_id with origin='visita'
     const finalOrigen = visita_id ? 'visita' : (origen || 'manual');
     const finalReferencia = visita_id || referencia_id || null;
 
-    await this.execute(
-      'INSERT INTO movimientos_inventario (insumo_id, tipo, cantidad, origen, referencia_id, fecha) VALUES (?, ?, ?, ?, ?, ?)',
-      [insumo_id, tipo, cantidad, finalOrigen, finalReferencia, fecha || new Date().toISOString().split('T')[0]]
-    );
+    const id = this.nextIds.movimientos_inventario++;
+    const movimiento = {
+      id,
+      insumo_id,
+      tipo,
+      cantidad,
+      origen: finalOrigen,
+      referencia_id: finalReferencia,
+      fecha: fecha || new Date().toISOString().split('T')[0],
+      created_at: new Date().toISOString()
+    };
+
+    this.data.movimientos_inventario.push(movimiento);
+    this.save();
   }
 
   async getMovimientosByInsumo(insumoId, limit = 50) {
-    return this.query(
-      'SELECT * FROM movimientos_inventario WHERE insumo_id = ? ORDER BY fecha DESC, created_at DESC LIMIT ?',
-      [insumoId, limit]
-    );
+    let movimientos = (this.data.movimientos_inventario || []).filter(m => m.insumo_id === insumoId);
+    movimientos.sort((a, b) => {
+      const aDate = new Date(b.fecha || 0);
+      const bDate = new Date(a.fecha || 0);
+      return aDate - bDate;
+    });
+    return movimientos.slice(0, limit);
   }
 
   // ==================== CONFIGURACION ====================
 
   async getConfig(clave) {
-    const row = await this.queryOne('SELECT valor FROM configuracion WHERE clave = ?', [clave]);
-    return row ? row.valor : null;
+    const config = (this.data.configuracion || []).find(c => c.clave === clave);
+    return config ? config.valor : null;
   }
 
   async getAllConfig() {
-    const rows = await this.query('SELECT clave, valor FROM configuracion');
+    const rows = this.data.configuracion || [];
     return rows.reduce((acc, r) => { acc[r.clave] = r.valor; return acc; }, {});
   }
 
   async setConfig(clave, valor) {
-    await this.execute(
-      'INSERT INTO configuracion (clave, valor) VALUES (?, ?) ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor',
-      [clave, valor]
-    );
+    const idx = (this.data.configuracion || []).findIndex(c => c.clave === clave);
+
+    if (idx >= 0) {
+      this.data.configuracion[idx].valor = valor;
+    } else {
+      this.data.configuracion.push({ clave, valor });
+    }
+
+    this.save();
     return { clave, valor };
   }
 
   // ==================== GASTOS ====================
 
   async createGasto({ descripcion, monto, fecha, categoria }) {
-    const result = await this.execute(
-      'INSERT INTO gastos (descripcion, monto, fecha, categoria) VALUES (?, ?, ?, ?)',
-      [descripcion, monto, fecha || new Date().toISOString().split('T')[0], categoria || 'otros']
-    );
-    return this.queryOne('SELECT * FROM gastos WHERE id = ?', [result.lastID]);
+    const id = this.nextIds.gastos++;
+    const gasto = {
+      id,
+      descripcion,
+      monto,
+      fecha: fecha || new Date().toISOString().split('T')[0],
+      categoria: categoria || 'otros',
+      created_at: new Date().toISOString()
+    };
+
+    this.data.gastos.push(gasto);
+    this.save();
+    return gasto;
   }
 
   async getAllGastos(limit = 500) {
-    return this.query('SELECT * FROM gastos ORDER BY fecha DESC, created_at DESC LIMIT ?', [limit]);
+    let gastos = this.data.gastos || [];
+    gastos.sort((a, b) => {
+      const aDate = new Date(b.fecha || 0);
+      const bDate = new Date(a.fecha || 0);
+      return aDate - bDate;
+    });
+    return gastos.slice(0, limit);
   }
 
   async deleteGasto(id) {
-    await this.execute('DELETE FROM gastos WHERE id = ?', [id]);
+    this.data.gastos = (this.data.gastos || []).filter(g => g.id !== id);
+    this.save();
   }
 
   // ==================== SYNC ====================
 
-  /**
-   * Get all unsynced visits
-   */
   async getUnsynced() {
-    return this.query('SELECT * FROM visitas WHERE sincronizada = 0 ORDER BY created_at');
+    return (this.data.visitas || []).filter(v => v.sincronizada === 0);
   }
 
-  /**
-   * Mark visit as synced
-   */
   async markSynced(visitaId) {
-    const sql = 'UPDATE visitas SET sincronizada = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
-    await this.execute(sql, [visitaId]);
-    return this.queryOne('SELECT * FROM visitas WHERE id = ?', [visitaId]);
+    const visitaIdx = this.data.visitas.findIndex(v => v.id === visitaId);
+    if (visitaIdx < 0) return null;
+
+    this.data.visitas[visitaIdx].sincronizada = 1;
+    this.data.visitas[visitaIdx].updated_at = new Date().toISOString();
+    this.save();
+    return this.data.visitas[visitaIdx];
   }
 }
 
 // Create and export singleton instance
-const databaseService = new DatabaseService('./piletero.db');
+const databaseService = new DatabaseService(join(__dirname, '../data.json'));
 export default databaseService;
