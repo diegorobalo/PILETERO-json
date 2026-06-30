@@ -254,9 +254,10 @@ router.post('/visitas', async (req, res) => {
 
     // Descontar stock de cada insumo en paralelo (después de guardar)
     // Note: ajustarStock() handles both stock update AND movement logging internally
+    // Pass visita_id to link consumption to source visit
     await Promise.all(
       quimicosUsados.map(insumo =>
-        databaseService.ajustarStock(insumo.insumo_id, -insumo.cantidad)
+        databaseService.ajustarStock(insumo.insumo_id, -insumo.cantidad, createdVisita.id)
           .catch(e => {
             console.error(`[visitas] CRITICAL: Failed to deduct stock for insumo ${insumo.insumo_id} after saving visita ${createdVisita.id}. Manual correction needed.`, e.message);
             // Nota: Visita fue guardada pero stock no decrementó. Inconsistencia de datos.

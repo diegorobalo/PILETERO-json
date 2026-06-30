@@ -254,7 +254,14 @@ export default function InventarioPage() {
                         m.tipo === 'uso' ? 'bg-orange-100 text-orange-700' :
                         'bg-gray-100 text-gray-700'
                       }`}>{m.tipo}</span>
-                      <span className="text-sm text-gray-500">{m.fecha} · {m.origen}</span>
+                      <span className="text-sm text-gray-500">{m.fecha}</span>
+                      {m.origen === 'visita' && m.referencia_id ? (
+                        <a href={`/visita/${m.referencia_id}`} className="text-sm text-blue-600 hover:text-blue-800 hover:underline ml-2">
+                          Usado en Visita #{m.referencia_id}
+                        </a>
+                      ) : (
+                        <span className="text-sm text-gray-500 ml-2">· {m.origen}</span>
+                      )}
                     </div>
                     <span className={`text-sm font-bold ${m.cantidad > 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {m.cantidad > 0 ? '+' : ''}{m.cantidad} {historialModal.insumo.unidad}

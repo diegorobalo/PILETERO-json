@@ -462,7 +462,7 @@ class DatabaseService {
     return this.getInventarioById(id);
   }
 
-  async ajustarStock(id, cantidad) {
+  async ajustarStock(id, cantidad, visita_id = null) {
     await this.execute(
       'UPDATE inventario SET stock_actual = MAX(0, stock_actual + ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [cantidad, id]
@@ -472,6 +472,7 @@ class DatabaseService {
       tipo: cantidad > 0 ? 'compra' : 'uso',
       cantidad,
       origen: 'manual',
+      visita_id: visita_id,
       fecha: new Date().toISOString().split('T')[0],
     });
     return this.getInventarioById(id);
@@ -539,10 +540,14 @@ class DatabaseService {
 
   // ==================== MOVIMIENTOS INVENTARIO ====================
 
-  async registrarMovimiento({ insumo_id, tipo, cantidad, origen, referencia_id, fecha }) {
+  async registrarMovimiento({ insumo_id, tipo, cantidad, origen, referencia_id, visita_id, fecha }) {
+    // If visita_id is provided, store it in referencia_id with origin='visita'
+    const finalOrigen = visita_id ? 'visita' : (origen || 'manual');
+    const finalReferencia = visita_id || referencia_id || null;
+
     await this.execute(
       'INSERT INTO movimientos_inventario (insumo_id, tipo, cantidad, origen, referencia_id, fecha) VALUES (?, ?, ?, ?, ?, ?)',
-      [insumo_id, tipo, cantidad, origen || 'manual', referencia_id || null, fecha || new Date().toISOString().split('T')[0]]
+      [insumo_id, tipo, cantidad, finalOrigen, finalReferencia, fecha || new Date().toISOString().split('T')[0]]
     );
   }
 
