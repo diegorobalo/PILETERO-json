@@ -214,7 +214,11 @@ io.on('connection', (socket) => {
 
 // ==================== FRONTEND ESTÁTICO ====================
 
-const distPath = join(__dirname, '../frontend/dist');
+// Buscar frontend: primero en public/ (Vercel), sino en ../frontend/dist (desarrollo)
+const distPath = existsSync(join(__dirname, 'public'))
+  ? join(__dirname, 'public')
+  : join(__dirname, '../frontend/dist');
+
 if (existsSync(distPath)) {
   app.use(express.static(distPath));
   app.get('*', (req, res, next) => {
