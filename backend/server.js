@@ -57,6 +57,8 @@ const MIGRATIONS = [
   "CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha)",
   // NUEVAS v1.1.1 - Extras/Adicionales
   "ALTER TABLE visitas ADD COLUMN extras JSON DEFAULT '[]'",
+  // NUEVA v1.2.1 - Mes field for recibos
+  "ALTER TABLE pagos ADD COLUMN mes VARCHAR(20) DEFAULT NULL",
 ];
 
 db.exec(schema, (err) => {

@@ -206,6 +206,9 @@ const apiClient = {
   createPago(data) {
     return axiosInstance.post('/pagos', data).then((r) => r.data);
   },
+  updatePago(id, data) {
+    return axiosInstance.put(`/pagos/${id}`, data).then((r) => r.data);
+  },
   deletePago(id) {
     return axiosInstance.delete(`/pagos/${id}`).then((r) => r.data);
   },

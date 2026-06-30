@@ -29,7 +29,7 @@ export default function FinancePage() {
   const [tab, setTab] = useState('mes')
   const [mes, setMes] = useState(getMesActual())
   const [modalCliente, setModalCliente] = useState(null)
-  const [formPago, setFormPago] = useState({ monto: '', fecha: new Date().toISOString().split('T')[0], metodo_pago: 'efectivo' })
+  const [formPago, setFormPago] = useState({ monto: '', fecha: new Date().toISOString().split('T')[0], metodo_pago: 'efectivo', mes: '' })
   const [guardando, setGuardando] = useState(false)
   const [showAumento, setShowAumento] = useState(false)
   const [pctAumento, setPctAumento] = useState('10')
@@ -61,6 +61,7 @@ export default function FinancePage() {
       monto: cliente.precio_abono ? String(cliente.precio_abono) : '',
       fecha: new Date().toISOString().split('T')[0],
       metodo_pago: 'efectivo',
+      mes: '',
     })
   }
 
@@ -75,6 +76,7 @@ export default function FinancePage() {
         fecha: formPago.fecha,
         metodo_pago: formPago.metodo_pago,
         estado: 'pagado',
+        mes: formPago.mes || null,
       })
       await cargar()
       setModalCliente(null)
@@ -94,6 +96,7 @@ export default function FinancePage() {
           fecha: formPago.fecha,
           metodo_pago: formPago.metodo_pago,
           estado: 'pagado',
+          mes: formPago.mes || null,
           timestamp: Date.now(),
         })
         localStorage.setItem('piletero_q_pagos', JSON.stringify(q))
@@ -475,6 +478,26 @@ export default function FinancePage() {
                   <option value="débito">Tarjeta débito</option>
                   <option value="crédito">Tarjeta crédito</option>
                   <option value="otro">Otro</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mes (opcional)</label>
+                <select value={formPago.mes}
+                  onChange={e => setFormPago(f => ({ ...f, mes: e.target.value }))}
+                  className="w-full border border-gray-300 rounded px-3 py-2">
+                  <option value="">— Seleccionar mes —</option>
+                  <option value="Enero">Enero</option>
+                  <option value="Febrero">Febrero</option>
+                  <option value="Marzo">Marzo</option>
+                  <option value="Abril">Abril</option>
+                  <option value="Mayo">Mayo</option>
+                  <option value="Junio">Junio</option>
+                  <option value="Julio">Julio</option>
+                  <option value="Agosto">Agosto</option>
+                  <option value="Septiembre">Septiembre</option>
+                  <option value="Octubre">Octubre</option>
+                  <option value="Noviembre">Noviembre</option>
+                  <option value="Diciembre">Diciembre</option>
                 </select>
               </div>
             </div>

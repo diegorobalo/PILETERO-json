@@ -425,6 +425,24 @@ router.get('/pagos/cliente/:clienteId', async (req, res) => {
 });
 
 /**
+ * PUT /api/pagos/:id
+ */
+router.put('/pagos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pago = await databaseService.queryOne('SELECT * FROM pagos WHERE id = ?', [id]);
+    if (!pago) {
+      return res.status(404).json({ error: 'Pago not found' });
+    }
+    const updatedPago = await databaseService.updatePago(id, req.body);
+    res.json({ success: true, pago: updatedPago });
+  } catch (error) {
+    console.error('Error updating pago:', error);
+    res.status(500).json({ error: 'Failed to update payment' });
+  }
+});
+
+/**
  * DELETE /api/pagos/:id
  */
 router.delete('/pagos/:id', async (req, res) => {

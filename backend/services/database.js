@@ -356,14 +356,15 @@ class DatabaseService {
   /**
    * Create a new payment record
    */
-  async createPago({ cliente_id, monto, fecha, metodo_pago, estado }) {
-    const sql = `INSERT INTO pagos (cliente_id, monto, fecha, metodo_pago, estado)
-                 VALUES (?, ?, ?, ?, ?)`;
+  async createPago({ cliente_id, monto, fecha, metodo_pago, estado, mes }) {
+    const sql = `INSERT INTO pagos (cliente_id, monto, fecha, metodo_pago, estado, mes)
+                 VALUES (?, ?, ?, ?, ?, ?)`;
     const result = await this.execute(sql, [
       cliente_id, monto,
       fecha || new Date().toISOString().split('T')[0],
       metodo_pago || 'efectivo',
       estado || 'pagado',
+      mes || null,
     ]);
     return this.queryOne('SELECT * FROM pagos WHERE id = ?', [result.lastID]);
   }
@@ -382,6 +383,22 @@ class DatabaseService {
       'SELECT * FROM pagos WHERE cliente_id = ? ORDER BY fecha DESC',
       [clienteId]
     );
+  }
+
+  async updatePago(id, data) {
+    const allowed = ['monto', 'fecha', 'metodo_pago', 'estado', 'mes'];
+    const updates = [];
+    const params = [];
+    for (const [key, value] of Object.entries(data)) {
+      if (allowed.includes(key)) {
+        updates.push(`${key} = ?`);
+        params.push(value);
+      }
+    }
+    if (!updates.length) return this.queryOne('SELECT * FROM pagos WHERE id = ?', [id]);
+    params.push(id);
+    await this.execute(`UPDATE pagos SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, params);
+    return this.queryOne('SELECT * FROM pagos WHERE id = ?', [id]);
   }
 
   async deletePago(id) {

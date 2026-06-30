@@ -21,6 +21,7 @@ function capitalize(str) {
 }
 
 function buildWhatsAppText(pago, cliente, tecnico) {
+  const mesText = pago.mes ? capitalize(pago.mes) : capitalize(formatMes(pago.fecha));
   return `🏊 *RECIBO DE PAGO - PILETERO*
 ================
 *Cliente:* ${pago.cliente_nombre || cliente?.nombre || ''}
@@ -30,7 +31,7 @@ function buildWhatsAppText(pago, cliente, tecnico) {
 💰 *PAGO RECIBIDO*
 • Monto: $${(pago.monto || 0).toLocaleString('es-AR')}
 • Método: ${capitalize(pago.metodo_pago || 'efectivo')}
-• Concepto: Abono mantenimiento de piscina — ${capitalize(formatMes(pago.fecha))}
+• Concepto: Abono mantenimiento de piscina — ${mesText}
 
 ✅ *PAGADO*
 Recibo N° ${String(pago.id || '').padStart(4, '0')}
@@ -146,7 +147,7 @@ export default function ReciboPagoPage() {
         <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
           <p className="text-xs text-gray-400 uppercase tracking-wide font-bold mb-3">Concepto</p>
           <p className="text-gray-700">Abono de mantenimiento de piscina</p>
-          <p className="text-gray-500 text-sm mt-1">Período: {capitalize(formatMes(pago.fecha))}</p>
+          <p className="text-gray-500 text-sm mt-1">Período: {pago.mes ? capitalize(pago.mes) : capitalize(formatMes(pago.fecha))}</p>
         </div>
 
         {/* Monto — protagonista */}
