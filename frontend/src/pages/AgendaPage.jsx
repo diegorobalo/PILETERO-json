@@ -281,11 +281,16 @@ export default function AgendaPage() {
   useEffect(() => {
     cargarDatos();
     const goOffline = () => setSyncStatus('offline');
+    const onVisible = () => { if (document.visibilityState === 'visible') cargarDatos(); };
     window.addEventListener('online', cargarDatos);
     window.addEventListener('offline', goOffline);
+    document.addEventListener('visibilitychange', onVisible);
+    const intervalo = setInterval(cargarDatos, 60_000);
     return () => {
       window.removeEventListener('online', cargarDatos);
       window.removeEventListener('offline', goOffline);
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(intervalo);
     };
   }, []);
 
