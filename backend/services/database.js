@@ -141,7 +141,7 @@ class DatabaseService {
 
   async getAllClientes() {
     const db = getClient();
-    const result = await db.execute('SELECT * FROM clientes ORDER BY nombre ASC');
+    const result = await db.execute('SELECT * FROM clientes WHERE activo = 1 ORDER BY nombre ASC');
     return rowsToObjs(result.rows);
   }
 

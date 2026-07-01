@@ -54,7 +54,7 @@ export default function ClientsPage() {
   const handleDeleteCliente = async (id) => {
     if (confirm('¿Eliminar este cliente?')) {
       try {
-        await apiClient.updateCliente(id, { activo: 0 })
+        await apiClient.updateCliente(id, { activo: 0, estado: 'eliminado' })
         await loadClientes()
       } catch (err) {
         alert('Error al eliminar: ' + (err.response?.data?.error || err.message))
