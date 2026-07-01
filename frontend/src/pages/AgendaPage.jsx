@@ -98,13 +98,26 @@ export default function AgendaPage() {
       setLoading(true);
       await storageService.init();
 
-      let todos = await storageService.getAllClientes();
-      // Fallback a localStorage si IndexedDB está vacío
+      // Intentar desde la API primero (Turso es la fuente de verdad en la nube)
+      let todos = [];
+      try {
+        const fromAPI = await apiClient.getClientes();
+        if (fromAPI.length > 0) {
+          for (const cliente of fromAPI) {
+            await storageService.saveCliente(cliente);
+          }
+          todos = fromAPI;
+        }
+      } catch {}
+      // Fallback a IndexedDB si la API no responde
       if (todos.length === 0) {
-        try {
-          const cached = JSON.parse(localStorage.getItem('piletero_clientes_cache') || '[]');
-          if (cached.length > 0) todos = cached;
-        } catch {}
+        todos = await storageService.getAllClientes();
+        if (todos.length === 0) {
+          try {
+            const cached = JSON.parse(localStorage.getItem('piletero_clientes_cache') || '[]');
+            if (cached.length > 0) todos = cached;
+          } catch {}
+        }
       }
       const todasVisitas = await storageService.getAllVisitas();
       const visitasHoy = todasVisitas.filter((v) => v.fecha === fecha);
