@@ -24,6 +24,7 @@ export default function FinancePage() {
   const [clientes, setClientes] = useState([])
   const [pagos, setPagos] = useState([])
   const [gastos, setGastos] = useState([])
+  const [visitas, setVisitas] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('mes')
@@ -43,14 +44,16 @@ export default function FinancePage() {
   async function cargar() {
     try {
       setLoading(true); setError(null)
-      const [cs, ps, gs] = await Promise.all([
+      const [cs, ps, gs, vs] = await Promise.all([
         apiClient.getClientes(),
         apiClient.getPagos(),
         apiClient.getGastos(),
+        apiClient.getVisitas(),
       ])
       setClientes(cs)
       setPagos(ps)
       setGastos(gs)
+      setVisitas(vs || [])
     } catch { setError('No se pudo conectar al servidor.') }
     finally { setLoading(false) }
   }
@@ -155,6 +158,17 @@ export default function FinancePage() {
     catch { toastError('No se pudo eliminar') }
   }
 
+  function getExtrasTotal(mesStr) {
+    return visitas
+      .filter(v => v.fecha?.startsWith(mesStr))
+      .reduce((sum, v) => {
+        try {
+          const extr = Array.isArray(v.extras) ? v.extras : JSON.parse(v.extras || '[]')
+          return sum + extr.reduce((s, e) => s + (e.monto || 0), 0)
+        } catch { return sum }
+      }, 0)
+  }
+
   const clientesActivos = clientes.filter(c => c.estado === 'activo')
 
   const clientesConStatus = clientesActivos.map(c => {
@@ -232,15 +246,23 @@ export default function FinancePage() {
             {(() => {
               const gastosMes = gastos.filter(g => g.fecha?.startsWith(mes))
               const totalGastosMes = gastosMes.reduce((s, g) => s + (g.monto || 0), 0)
-              const ganancia = totalCobrado - totalGastosMes
+              const totalExtrasMes = getExtrasTotal(mes)
+              const ganancia = totalCobrado + totalExtrasMes - totalGastosMes
               return (
                 <div className="grid grid-cols-2 gap-2 mb-4">
+                  {totalExtrasMes > 0 && (
+                    <div className="bg-white rounded-xl shadow-sm border border-purple-100 p-3">
+                      <p className="text-xs text-purple-500 uppercase tracking-wide mb-1">Extras</p>
+                      <p className="text-base font-black text-purple-700">${totalExtrasMes.toLocaleString('es-AR')}</p>
+                      <p className="text-xs text-purple-300 mt-0.5">trabajos adicionales</p>
+                    </div>
+                  )}
                   <div className="bg-white rounded-xl shadow-sm border border-orange-100 p-3">
                     <p className="text-xs text-orange-400 uppercase tracking-wide mb-1">Gastado</p>
                     <p className="text-base font-black text-orange-600">${totalGastosMes.toLocaleString('es-AR')}</p>
                     <p className="text-xs text-orange-300 mt-0.5">{gastosMes.length} gasto(s)</p>
                   </div>
-                  <div className={`bg-white rounded-xl shadow-sm p-3 border ${ganancia >= 0 ? 'border-green-100' : 'border-red-100'}`}>
+                  <div className={`bg-white rounded-xl shadow-sm p-3 border ${ganancia >= 0 ? 'border-green-100' : 'border-red-100'} ${totalExtrasMes > 0 ? '' : 'col-start-2'}`}>
                     <p className={`text-xs uppercase tracking-wide mb-1 ${ganancia >= 0 ? 'text-green-500' : 'text-red-400'}`}>Ganancia neta</p>
                     <p className={`text-base font-black ${ganancia >= 0 ? 'text-green-700' : 'text-red-600'}`}>${ganancia.toLocaleString('es-AR')}</p>
                   </div>
@@ -361,7 +383,8 @@ export default function FinancePage() {
                 const pagosActivos = pagosDelMes.filter(p => clientesActivos.some(c => c.id === p.cliente_id))
                 const cobrado = pagosActivos.reduce((s,p) => s+(p.monto||0), 0)
                 const gastado = gastos.filter(g => g.fecha?.startsWith(key)).reduce((s,g) => s+(g.monto||0), 0)
-                return { label, cobrado, gastado, ganancia: cobrado - gastado }
+                const extras = getExtrasTotal(key)
+                return { label, cobrado, gastado, extras, ganancia: cobrado + extras - gastado }
               })
               const totalAnio = filas.reduce((s,f) => s + f.cobrado, 0)
               const gastoAnio = filas.reduce((s,f) => s + f.gastado, 0)

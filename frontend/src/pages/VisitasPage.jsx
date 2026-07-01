@@ -4,7 +4,6 @@ import { apiClient } from '../services/api'
 import { parseQuimicos, quimicosTexto } from '../utils/quimicosHelper'
 import TaskChecklist from '../components/TaskChecklist'
 import WaterMeasurement from '../components/WaterMeasurement'
-import DosisCalculadora from '../components/DosisCalculadora'
 import SelectorInsumo from '../components/SelectorInsumo'
 
 const TASK_LABELS = {
@@ -49,7 +48,7 @@ export default function VisitasPage() {
   const [ph, setPh] = useState('')
   const [quimicosUsados, setQuimicosUsados] = useState([])
   const [guardando, setGuardando] = useState(false)
-  const [clienteSeleccionado, setClienteSeleccionado] = useState(null)
+  const [editandoVisitaId, setEditandoVisitaId] = useState(null)
   const [extras, setExtras] = useState([])
   const [extraDescripcion, setExtraDescripcion] = useState('')
   const [extraMonto, setExtraMonto] = useState('')
@@ -75,11 +74,6 @@ export default function VisitasPage() {
     } catch (e) {
       alert('Error al eliminar: ' + (e.response?.data?.error || e.message))
     }
-  }
-
-  function handleDosisChange(data) {
-    // data = { condicion, usados (array) }
-    setQuimicosUsados(data.usados || [])
   }
 
   function handleEditarCantidad(idx, nuevaCantidad) {
@@ -125,6 +119,39 @@ export default function VisitasPage() {
     return extras.reduce((sum, e) => sum + e.monto, 0)
   }
 
+  function editarVisita(v) {
+    let quim = []
+    try {
+      const raw = v.quimicos_usados
+      if (Array.isArray(raw)) quim = raw
+      else if (typeof raw === 'string') quim = JSON.parse(raw) || []
+    } catch {}
+
+    let extr = []
+    try {
+      const raw = v.extras
+      if (Array.isArray(raw)) extr = raw
+      else if (typeof raw === 'string') extr = JSON.parse(raw) || []
+    } catch {}
+
+    setForm({ cliente_id: String(v.cliente_id), fecha: v.fecha, observaciones: v.observaciones || '' })
+    setTasks((() => { try { const r = v.tareas_realizadas; return Array.isArray(r) ? r : JSON.parse(r) || [] } catch { return [] } })())
+    setCloro(v.cloro_ppm != null ? String(v.cloro_ppm) : '')
+    setPh(v.ph != null ? String(v.ph) : '')
+    setQuimicosUsados(quim)
+    setExtras(extr.map(e => ({ ...e, id: e.id || Date.now() + Math.random() })))
+    setEditandoVisitaId(v.id)
+    setVistaActual('nueva')
+    setExpandida(null)
+  }
+
+  function resetForm() {
+    setForm({ cliente_id: '', fecha: today, observaciones: '' })
+    setTasks([]); setCloro(''); setPh(''); setQuimicosUsados([])
+    setExtras([]); setExtraDescripcion(''); setExtraMonto('')
+    setEditandoVisitaId(null)
+  }
+
   async function guardarVisita() {
     if (!form.cliente_id) return alert('Seleccioná un cliente')
     if (cloro === '' && ph === '') return alert('Ingresá al menos una medición (cloro o pH)')
@@ -142,17 +169,21 @@ export default function VisitasPage() {
         observaciones: form.observaciones,
         extras: extras,
       }
-      const creada = await apiClient.createVisita(visita)
+
+      let resultId
+      if (editandoVisitaId) {
+        await apiClient.updateVisita(editandoVisitaId, visita)
+        resultId = editandoVisitaId
+      } else {
+        const creada = await apiClient.createVisita(visita)
+        resultId = creada.id
+      }
+
       await cargar()
       setVistaActual('historial')
-      setExpandida(creada.id)
-      // Reset form
-      setForm({ cliente_id: '', fecha: today, observaciones: '' })
-      setTasks([]); setCloro(''); setPh(''); setQuimicosUsados([])
-      setExtras([])
-      setExtraDescripcion('')
-      setExtraMonto('')
-      alert('✓ Visita registrada correctamente')
+      setExpandida(resultId)
+      resetForm()
+      alert(editandoVisitaId ? '✓ Visita actualizada correctamente' : '✓ Visita registrada correctamente')
     } catch (e) {
       alert('Error: ' + (e.response?.data?.error || e.message))
     } finally { setGuardando(false) }
@@ -163,7 +194,6 @@ export default function VisitasPage() {
     ? visitas.filter(v => v.fecha === filtroFecha)
     : visitas
 
-  const clienteDelForm = clientes.find(c => c.id === parseInt(form.cliente_id))
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -172,7 +202,7 @@ export default function VisitasPage() {
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-3xl font-bold text-gray-900">🗓️ Visitas</h1>
           <button
-            onClick={() => { setVistaActual('nueva'); setExpandida(null) }}
+            onClick={() => { resetForm(); setVistaActual('nueva'); setExpandida(null) }}
             className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded"
           >
             + Nueva visita
@@ -298,12 +328,34 @@ export default function VisitasPage() {
                             </div>
                           )}
 
-                          <div className="flex gap-3 mt-2">
+                          {(() => {
+                            try {
+                              const extr = Array.isArray(v.extras) ? v.extras : JSON.parse(v.extras || '[]')
+                              if (extr.length > 0) return (
+                                <div className="mb-4">
+                                  <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Extras cobrados</p>
+                                  {extr.map((e, i) => (
+                                    <p key={i} className="text-sm text-purple-700">• {e.descripcion}: <strong>${e.monto?.toLocaleString('es-AR')}</strong></p>
+                                  ))}
+                                  <p className="text-sm font-bold text-purple-900 mt-1">Total: ${extr.reduce((s, e) => s + (e.monto || 0), 0).toLocaleString('es-AR')}</p>
+                                </div>
+                              )
+                            } catch {}
+                            return null
+                          })()}
+
+                          <div className="flex gap-3 mt-2 flex-wrap">
                             <button
                               onClick={() => navigate('/reporte', { state: { visita: v } })}
                               className="px-4 py-2 bg-green-600 text-white rounded font-medium text-sm hover:bg-green-700"
                             >
                               📄 Ver informe / PDF
+                            </button>
+                            <button
+                              onClick={() => editarVisita(v)}
+                              className="px-4 py-2 bg-blue-600 text-white rounded font-medium text-sm hover:bg-blue-700"
+                            >
+                              ✏️ Editar
                             </button>
                             <button
                               onClick={() => eliminarVisita(v.id)}
@@ -325,7 +377,9 @@ export default function VisitasPage() {
         {/* ── NUEVA VISITA ── */}
         {vistaActual === 'nueva' && (
           <div className="max-w-2xl">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Registrar visita</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-6">
+              {editandoVisitaId ? '✏️ Editar visita' : 'Registrar visita'}
+            </h2>
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 mb-4">
               <div className="grid grid-cols-2 gap-4 mb-6">
@@ -333,10 +387,7 @@ export default function VisitasPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Cliente *</label>
                   <select
                     value={form.cliente_id}
-                    onChange={e => {
-                      setForm(f => ({ ...f, cliente_id: e.target.value }))
-                      setClienteSeleccionado(clientes.find(c => c.id === parseInt(e.target.value)) || null)
-                    }}
+                    onChange={e => setForm(f => ({ ...f, cliente_id: e.target.value }))}
                     className="w-full border border-gray-300 rounded px-3 py-2"
                   >
                     <option value="">Seleccionar...</option>
@@ -356,12 +407,6 @@ export default function VisitasPage() {
 
               <TaskChecklist tasks={tasks} onChange={setTasks} />
               <WaterMeasurement cloro={cloro} ph={ph} onChange={(k, v) => { if (k === 'cloro') setCloro(v); else setPh(v) }} />
-              <DosisCalculadora
-                volumenLitros={clienteDelForm?.volumen_litros}
-                cloroActual={cloro}
-                phActual={ph}
-                onChange={handleDosisChange}
-              />
 
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Observaciones</label>
@@ -497,7 +542,7 @@ export default function VisitasPage() {
               >
                 {guardando ? 'Guardando...' : '✅ Guardar visita'}
               </button>
-              <button onClick={() => setVistaActual('agenda')} className="px-6 bg-gray-200 text-gray-700 font-bold py-3 rounded">
+              <button onClick={() => { resetForm(); setVistaActual('agenda') }} className="px-6 bg-gray-200 text-gray-700 font-bold py-3 rounded">
                 Cancelar
               </button>
             </div>
