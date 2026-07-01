@@ -6,7 +6,6 @@ import PhotoUpload from '../components/PhotoUpload';
 import DosisCalculadora from '../components/DosisCalculadora';
 import storageService from '../services/storage';
 import { apiClient } from '../services/api';
-import syncService from '../services/sync';
 import { toastError, toastWarn } from '../utils/toast';
 
 export default function VisitFormPage() {
@@ -109,22 +108,10 @@ export default function VisitFormPage() {
         ph: ph === '' ? null : parseFloat(ph),
         quimicos_usados: quimicosUsados,
         observaciones,
-        sincronizada: false,
       };
 
-      const visitaId = await storageService.saveVisita(visita);
-
-      for (const foto of fotos) {
-        await storageService.saveFoto({
-          visita_id: visitaId,
-          tipo: foto.type,
-          data: foto.data,
-          // foto.timestamp puede ser Date (nueva) o string ISO (restaurada del draft)
-          timestamp: new Date(foto.timestamp).toISOString(),
-        });
-      }
-
-      syncService.requestSync().catch(() => {});
+      const visitaCreada = await apiClient.createVisita(visita);
+      const visitaId = visitaCreada.id;
 
       const visitaParaReporte = {
         ...visita,

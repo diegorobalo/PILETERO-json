@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ClientCard from '../components/ClientCard';
 import storageService from '../services/storage';
-import syncService from '../services/sync';
 import { apiClient } from '../services/api';
 import { toastSuccess, toastError, toastInfo } from '../utils/toast';
 import { interpolateMensaje, generateWhatsAppLink } from '../utils/messageInterpolation';
@@ -100,8 +99,10 @@ export default function AgendaPage() {
 
       // Intentar desde la API primero (Turso es la fuente de verdad en la nube)
       let todos = [];
+      let apiOk = false;
       try {
         const fromAPI = await apiClient.getClientes();
+        apiOk = true;
         if (fromAPI.length > 0) {
           for (const cliente of fromAPI) {
             await storageService.saveCliente(cliente);
@@ -109,6 +110,8 @@ export default function AgendaPage() {
           todos = fromAPI;
         }
       } catch {}
+      setSyncStatus(apiOk ? 'online' : 'offline');
+
       // Fallback a IndexedDB si la API no responde
       if (todos.length === 0) {
         todos = await storageService.getAllClientes();
@@ -119,8 +122,15 @@ export default function AgendaPage() {
           } catch {}
         }
       }
-      const todasVisitas = await storageService.getAllVisitas();
-      const visitasHoy = todasVisitas.filter((v) => v.fecha === fecha);
+
+      // Cargar visitas del día desde la API, con fallback a IndexedDB
+      let visitasHoy = [];
+      try {
+        visitasHoy = await apiClient.getVisitasByFecha(fecha) || [];
+      } catch {
+        const todasVisitas = await storageService.getAllVisitas();
+        visitasHoy = todasVisitas.filter((v) => v.fecha === fecha);
+      }
 
       setTodosClientes(todos || []);
       setVisitas(visitasHoy || []);
@@ -234,45 +244,14 @@ export default function AgendaPage() {
     }
   }
 
-  function setupSync() {
-    syncService.on('connected', () => setSyncStatus('online'));
-    syncService.on('disconnected', () => setSyncStatus('offline'));
-    syncService.on('offline', () => setSyncStatus('offline'));
-    syncService.connect();
-  }
-
   async function handleSync() {
     setIsSyncing(true);
     try {
-      await syncService.connect();
-      const ok = await syncService.requestSync();
-      if (ok) {
-        await cargarDatos();
-        try {
-          const cached = JSON.parse(localStorage.getItem('piletero_clientes_cache') || '[]');
-          toastSuccess(`Sincronización completada\n${cached.length} clientes guardados en el celular`);
-        } catch {
-          toastSuccess('Sincronización completada');
-        }
-      } else {
-        toastError('No se pudo sincronizar. Verifica que la compu esté encendida.');
-      }
-    } catch {
-      toastError('Error durante la sincronización');
+      await cargarDatos();
+      toastSuccess('Datos actualizados');
     } finally {
       setIsSyncing(false);
     }
-  }
-
-  async function autoSync() {
-    try {
-      await syncService.connect();
-      const ok = await syncService.requestSync();
-      if (ok) {
-        await cargarDatos();
-        toastInfo('Sincronización automática completada');
-      }
-    } catch {}
   }
 
   function getClienteStatus(clienteId) {
@@ -297,9 +276,8 @@ export default function AgendaPage() {
 
   useEffect(() => {
     cargarDatos();
-    setupSync();
-    window.addEventListener('online', autoSync);
-    return () => window.removeEventListener('online', autoSync);
+    window.addEventListener('online', cargarDatos);
+    return () => window.removeEventListener('online', cargarDatos);
   }, []);
 
   const clientesDeHoy = todosClientes
