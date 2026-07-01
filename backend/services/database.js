@@ -1,938 +1,625 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { createClient } from '@libsql/client';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+let client;
 
-/**
- * DatabaseService - JSON file-based storage for Vercel deployment
- * Provides same promise-based API as SQLite version but stores data in data.json
- * Maintains backward compatibility - no frontend changes needed
- */
+function getClient() {
+  if (!client) {
+    client = createClient({
+      url: process.env.TURSO_DATABASE_URL,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    });
+  }
+  return client;
+}
+
+const now = () => new Date().toISOString();
+const toInt = (v) => v != null ? parseInt(v, 10) : v;
+const rowToObj = (row) => {
+  if (!row) return null;
+  const obj = {};
+  for (const [k, v] of Object.entries(row)) {
+    obj[k] = typeof v === 'bigint' ? Number(v) : v;
+  }
+  return obj;
+};
+const rowsToObjs = (rows) => rows.map(rowToObj);
+
+const SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS clientes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre TEXT NOT NULL,
+    direccion TEXT,
+    telefono TEXT,
+    volumen_litros REAL,
+    tipo_construccion TEXT,
+    equipamiento TEXT,
+    modelo_filtro TEXT,
+    tipo_abono TEXT,
+    precio_abono REAL,
+    dias_visita TEXT,
+    frecuencia_visita TEXT DEFAULT 'semanal',
+    grupo_semana TEXT DEFAULT 'A',
+    notas_acceso TEXT,
+    activo INTEGER DEFAULT 1,
+    estado TEXT DEFAULT 'activo',
+    created_at TEXT,
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS visitas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cliente_id INTEGER,
+    fecha TEXT,
+    hora_inicio TEXT,
+    hora_fin TEXT,
+    tareas_realizadas TEXT,
+    cloro_ppm REAL,
+    ph REAL,
+    quimicos_usados TEXT,
+    observaciones TEXT,
+    extras TEXT DEFAULT '[]',
+    sincronizada INTEGER DEFAULT 0,
+    created_at TEXT,
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS inventario (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre TEXT NOT NULL,
+    unidad TEXT DEFAULT 'g',
+    stock_actual REAL DEFAULT 0,
+    stock_minimo REAL DEFAULT 0,
+    precio_unitario REAL,
+    created_at TEXT,
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS pagos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cliente_id INTEGER,
+    monto REAL,
+    fecha TEXT,
+    metodo_pago TEXT DEFAULT 'efectivo',
+    estado TEXT DEFAULT 'pagado',
+    mes TEXT,
+    tipo_abono TEXT,
+    created_at TEXT,
+    updated_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS gastos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    descripcion TEXT,
+    monto REAL,
+    fecha TEXT,
+    categoria TEXT DEFAULT 'otros',
+    created_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS configuracion (
+    clave TEXT PRIMARY KEY,
+    valor TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS movimientos_inventario (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    insumo_id INTEGER,
+    tipo TEXT,
+    cantidad REAL,
+    origen TEXT,
+    referencia_id INTEGER,
+    fecha TEXT,
+    created_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS fotos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    visita_id INTEGER,
+    tipo TEXT DEFAULT 'general',
+    ruta_archivo TEXT,
+    uploaded_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS fotos_clientes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cliente_id INTEGER,
+    tipo TEXT,
+    ruta_archivo TEXT,
+    created_at TEXT
+  )`,
+];
+
 class DatabaseService {
-  constructor(dataPath) {
-    this.dataPath = dataPath;
-    this.data = null;
-    this.nextIds = {}; // Track next ID for each table
-  }
-
-  /**
-   * Load data from JSON file (initialization)
-   */
-  init() {
-    try {
-      if (existsSync(this.dataPath)) {
-        const content = readFileSync(this.dataPath, 'utf8');
-        this.data = JSON.parse(content);
-      } else {
-        // Create default structure if file doesn't exist
-        this.data = {
-          clientes: [],
-          visitas: [],
-          inventario: [],
-          pagos: [],
-          gastos: [],
-          configuracion: [],
-          movimientos_inventario: [],
-          fotos: [],
-          fotos_clientes: []
-        };
-        this.save();
-      }
-
-      // Initialize nextIds trackers
-      this._initializeIds();
-      console.log('JSON data storage initialized:', this.dataPath);
-    } catch (err) {
-      console.error('Error initializing JSON storage:', err);
-      throw err;
+  async init() {
+    const db = getClient();
+    for (const sql of SCHEMA) {
+      await db.execute(sql);
     }
+    console.log('Turso database initialized');
   }
 
-  /**
-   * Initialize ID counters based on existing data
-   */
-  _initializeIds() {
-    const tables = ['clientes', 'visitas', 'inventario', 'pagos', 'gastos', 'configuracion', 'movimientos_inventario', 'fotos', 'fotos_clientes'];
-    for (const table of tables) {
-      const items = this.data[table] || [];
-      const maxId = items.reduce((max, item) => Math.max(max, item.id || 0), 0);
-      this.nextIds[table] = maxId + 1;
-    }
+  // Used by sync-service and routes for ad-hoc queries
+  async queryOne(sql, params = []) {
+    const db = getClient();
+    const result = await db.execute({ sql, args: params });
+    return result.rows.length > 0 ? rowToObj(result.rows[0]) : null;
   }
 
-  /**
-   * Save data to JSON file
-   */
-  save() {
-    try {
-      writeFileSync(this.dataPath, JSON.stringify(this.data, null, 2), 'utf8');
-      console.log(`[db-save] Persisted data to ${this.dataPath}`);
-    } catch (err) {
-      console.error('[db-save-error] Error saving JSON data:', err);
-      throw err;
-    }
-  }
-
-  /**
-   * Filter array by conditions (mimics SQL WHERE)
-   */
-  _filterRecords(array, conditions) {
-    if (!conditions || Object.keys(conditions).length === 0) {
-      return array;
-    }
-    return array.filter(record => {
-      return Object.entries(conditions).every(([key, value]) => {
-        if (typeof value === 'string' && value.includes('%')) {
-          // Handle LIKE queries
-          const pattern = value.replace(/%/g, '').toLowerCase();
-          return String(record[key] || '').toLowerCase().includes(pattern);
-        }
-        return record[key] === value;
-      });
-    });
-  }
-
-  /**
-   * SQL-like query interface (filtered array)
-   */
-  query(sql, params = []) {
-    return new Promise((resolve) => {
-      try {
-        // Parse SQL to determine table and WHERE conditions
-        const tableMatch = sql.match(/FROM\s+(\w+)/i);
-        const tableName = tableMatch ? tableMatch[1] : null;
-
-        if (!tableName || !this.data[tableName]) {
-          resolve([]);
-          return;
-        }
-
-        let results = [...this.data[tableName]];
-
-        // Simple ORDER BY handling
-        if (sql.includes('ORDER BY')) {
-          const orderMatch = sql.match(/ORDER BY\s+(\w+(?:\.\w+)?)\s*(DESC|ASC)?/i);
-          if (orderMatch) {
-            const field = orderMatch[1].split('.').pop();
-            const direction = orderMatch[2]?.toUpperCase() === 'DESC' ? -1 : 1;
-            results.sort((a, b) => {
-              const aVal = a[field];
-              const bVal = b[field];
-              if (aVal < bVal) return -1 * direction;
-              if (aVal > bVal) return 1 * direction;
-              return 0;
-            });
-          }
-        }
-
-        // Simple LIMIT handling
-        if (sql.includes('LIMIT')) {
-          const limitMatch = sql.match(/LIMIT\s+\?/i);
-          if (limitMatch && params.length > 0) {
-            results = results.slice(0, params[params.length - 1]);
-          }
-        }
-
-        resolve(results);
-      } catch (err) {
-        console.error('Query error:', err);
-        resolve([]);
-      }
-    });
-  }
-
-  /**
-   * SQL-like queryOne interface (single record)
-   */
-  queryOne(sql, params = []) {
-    return new Promise((resolve) => {
-      try {
-        // Parse table and WHERE
-        const tableMatch = sql.match(/FROM\s+(\w+)/i);
-        const tableName = tableMatch ? tableMatch[1] : null;
-
-        if (!tableName || !this.data[tableName]) {
-          resolve(null);
-          return;
-        }
-
-        // Extract WHERE conditions from SQL
-        let records = [...this.data[tableName]];
-
-        // Handle simple WHERE id = ? pattern
-        if (sql.includes('WHERE id = ?')) {
-          const record = records.find(r => r.id === params[0]);
-          resolve(record || null);
-          return;
-        }
-
-        // Handle other WHERE patterns
-        if (sql.includes('WHERE')) {
-          const whereMatch = sql.match(/WHERE\s+(.+?)(?:LIMIT|ORDER BY|$)/i);
-          if (whereMatch) {
-            const whereClause = whereMatch[1].trim();
-
-            // Simple pattern matching for common WHERE conditions
-            if (whereClause.includes('LIKE')) {
-              const likeMatch = whereClause.match(/(\w+)\s+LIKE\s+\?/i);
-              if (likeMatch && params.length > 0) {
-                const field = likeMatch[1];
-                const pattern = params[0].replace(/%/g, '').toLowerCase();
-                const record = records.find(r =>
-                  String(r[field] || '').toLowerCase().includes(pattern)
-                );
-                resolve(record || null);
-                return;
-              }
-            }
-          }
-        }
-
-        resolve(records[0] || null);
-      } catch (err) {
-        console.error('QueryOne error:', err);
-        resolve(null);
-      }
-    });
-  }
-
-  /**
-   * SQL-like execute interface (INSERT/UPDATE/DELETE)
-   */
-  execute(sql, params = []) {
-    return new Promise((resolve) => {
-      try {
-        // Handle INSERT
-        if (sql.includes('INSERT INTO')) {
-          const tableMatch = sql.match(/INSERT INTO\s+(\w+)/i);
-          const tableName = tableMatch ? tableMatch[1] : null;
-
-          if (tableName && this.data[tableName]) {
-            const id = this.nextIds[tableName]++;
-            const columnsMatch = sql.match(/\((.*?)\)\s*VALUES/i);
-            const columns = columnsMatch ? columnsMatch[1].split(',').map(c => c.trim()) : [];
-
-            const record = { id };
-            columns.forEach((col, idx) => {
-              record[col] = params[idx];
-            });
-
-            // Set timestamps
-            record.created_at = new Date().toISOString();
-            record.updated_at = new Date().toISOString();
-
-            this.data[tableName].push(record);
-            this.save();
-
-            resolve({ lastID: id, changes: 1 });
-            return;
-          }
-        }
-
-        // Handle UPDATE
-        if (sql.includes('UPDATE')) {
-          const tableMatch = sql.match(/UPDATE\s+(\w+)/i);
-          const tableName = tableMatch ? tableMatch[1] : null;
-
-          if (tableName && this.data[tableName]) {
-            // Extract SET clause
-            const setMatch = sql.match(/SET\s+(.+?)\s+WHERE/i);
-            if (!setMatch) {
-              resolve({ lastID: null, changes: 0 });
-              return;
-            }
-
-            const setClauses = setMatch[1].split(',').map(c => c.trim());
-            const updateFields = {};
-
-            let paramIdx = 0;
-            for (const clause of setClauses) {
-              if (clause.includes('=')) {
-                const [field] = clause.split('=').map(c => c.trim());
-                if (field !== 'updated_at') {
-                  updateFields[field] = params[paramIdx++];
-                }
-              }
-            }
-
-            // Extract WHERE condition (id = ?)
-            const whereMatch = sql.match(/WHERE\s+id\s*=\s*\?/i);
-            if (whereMatch) {
-              const id = params[params.length - 1];
-              const recordIdx = this.data[tableName].findIndex(r => r.id === id);
-
-              if (recordIdx >= 0) {
-                Object.assign(this.data[tableName][recordIdx], updateFields, {
-                  updated_at: new Date().toISOString()
-                });
-                this.save();
-                resolve({ lastID: id, changes: 1 });
-                return;
-              }
-            }
-          }
-        }
-
-        // Handle DELETE
-        if (sql.includes('DELETE')) {
-          const tableMatch = sql.match(/DELETE FROM\s+(\w+)/i);
-          const tableName = tableMatch ? tableMatch[1] : null;
-
-          if (tableName && this.data[tableName]) {
-            const whereMatch = sql.match(/WHERE\s+id\s*=\s*\?/i);
-            if (whereMatch && params.length > 0) {
-              const id = params[0];
-              const beforeLen = this.data[tableName].length;
-              this.data[tableName] = this.data[tableName].filter(r => r.id !== id);
-              const changes = beforeLen - this.data[tableName].length;
-              this.save();
-              resolve({ lastID: null, changes });
-              return;
-            }
-          }
-        }
-
-        resolve({ lastID: null, changes: 0 });
-      } catch (err) {
-        console.error('Execute error:', err);
-        resolve({ lastID: null, changes: 0 });
-      }
-    });
-  }
-
-  // ==================== CLIENTES (Clients) ====================
+  // ==================== CLIENTES ====================
 
   async getAllClientes() {
-    const clientes = this.data.clientes || [];
-    return clientes.sort((a, b) => a.nombre.localeCompare(b.nombre));
+    const db = getClient();
+    const result = await db.execute('SELECT * FROM clientes ORDER BY nombre ASC');
+    return rowsToObjs(result.rows);
   }
 
   async getClienteById(id) {
-    return (this.data.clientes || []).find(c => c.id === id) || null;
+    const db = getClient();
+    const result = await db.execute({ sql: 'SELECT * FROM clientes WHERE id = ?', args: [toInt(id)] });
+    return result.rows.length > 0 ? rowToObj(result.rows[0]) : null;
   }
 
   async createCliente(data) {
+    const db = getClient();
     const {
-      nombre,
-      direccion,
-      telefono,
-      volumen_litros,
-      tipo_construccion,
-      equipamiento,
-      modelo_filtro,
-      tipo_abono,
-      precio_abono,
-      dias_visita,
-      frecuencia_visita,
-      grupo_semana,
-      notas_acceso
+      nombre, direccion, telefono, volumen_litros, tipo_construccion,
+      equipamiento, modelo_filtro, tipo_abono, precio_abono,
+      dias_visita, frecuencia_visita, grupo_semana, notas_acceso
     } = data;
 
-    const id = this.nextIds.clientes++;
-    const cliente = {
-      id,
-      nombre,
-      direccion: direccion || null,
-      telefono: telefono || null,
-      volumen_litros: volumen_litros || null,
-      tipo_construccion: tipo_construccion || null,
-      equipamiento: equipamiento || null,
-      modelo_filtro: modelo_filtro || null,
-      tipo_abono: tipo_abono || null,
-      precio_abono: precio_abono || null,
-      dias_visita: dias_visita || null,
-      frecuencia_visita: frecuencia_visita || 'semanal',
-      grupo_semana: grupo_semana || 'A',
-      notas_acceso: notas_acceso || null,
-      activo: 1,
-      estado: 'activo',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+    const result = await db.execute({
+      sql: `INSERT INTO clientes (nombre, direccion, telefono, volumen_litros, tipo_construccion,
+            equipamiento, modelo_filtro, tipo_abono, precio_abono, dias_visita,
+            frecuencia_visita, grupo_semana, notas_acceso, activo, estado, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'activo', ?, ?)`,
+      args: [nombre, direccion || null, telefono || null, volumen_litros || null,
+             tipo_construccion || null, equipamiento || null, modelo_filtro || null,
+             tipo_abono || null, precio_abono || null, dias_visita || null,
+             frecuencia_visita || 'semanal', grupo_semana || 'A', notas_acceso || null,
+             now(), now()]
+    });
 
-    this.data.clientes.push(cliente);
-    this.save();
-    return cliente;
+    return this.getClienteById(Number(result.lastInsertRowid));
   }
 
   async updateCliente(id, data) {
+    const db = getClient();
     const allowedFields = [
-      'nombre',
-      'direccion',
-      'telefono',
-      'volumen_litros',
-      'tipo_construccion',
-      'equipamiento',
-      'modelo_filtro',
-      'tipo_abono',
-      'precio_abono',
-      'dias_visita',
-      'frecuencia_visita',
-      'grupo_semana',
-      'notas_acceso',
-      'activo'
+      'nombre', 'direccion', 'telefono', 'volumen_litros', 'tipo_construccion',
+      'equipamiento', 'modelo_filtro', 'tipo_abono', 'precio_abono', 'dias_visita',
+      'frecuencia_visita', 'grupo_semana', 'notas_acceso', 'activo'
     ];
 
-    const clienteIdx = this.data.clientes.findIndex(c => c.id === id);
-    if (clienteIdx < 0) return null;
-
+    const updates = [];
+    const args = [];
     for (const [key, value] of Object.entries(data)) {
       if (allowedFields.includes(key)) {
-        this.data.clientes[clienteIdx][key] = value;
+        updates.push(`${key} = ?`);
+        args.push(value);
       }
     }
 
-    this.data.clientes[clienteIdx].updated_at = new Date().toISOString();
-    this.save();
-    return this.data.clientes[clienteIdx];
+    if (updates.length > 0) {
+      updates.push('updated_at = ?');
+      args.push(now());
+      args.push(toInt(id));
+      await db.execute({ sql: `UPDATE clientes SET ${updates.join(', ')} WHERE id = ?`, args });
+    }
+
+    return this.getClienteById(toInt(id));
   }
 
   async suspenderCliente(id) {
-    const clienteIdx = this.data.clientes.findIndex(c => c.id === id);
-    if (clienteIdx < 0) return null;
-
-    this.data.clientes[clienteIdx].estado = 'suspendido';
-    this.data.clientes[clienteIdx].updated_at = new Date().toISOString();
-    this.save();
-    return this.data.clientes[clienteIdx];
+    const db = getClient();
+    await db.execute({
+      sql: `UPDATE clientes SET estado = 'suspendido', updated_at = ? WHERE id = ?`,
+      args: [now(), toInt(id)]
+    });
+    return this.getClienteById(toInt(id));
   }
 
   async reactivarCliente(id) {
-    const clienteIdx = this.data.clientes.findIndex(c => c.id === id);
-    if (clienteIdx < 0) return null;
-
-    this.data.clientes[clienteIdx].estado = 'activo';
-    this.data.clientes[clienteIdx].updated_at = new Date().toISOString();
-    this.save();
-    return this.data.clientes[clienteIdx];
+    const db = getClient();
+    await db.execute({
+      sql: `UPDATE clientes SET estado = 'activo', updated_at = ? WHERE id = ?`,
+      args: [now(), toInt(id)]
+    });
+    return this.getClienteById(toInt(id));
   }
 
-  // ==================== FOTOS (Photos) ====================
-
-  async getFotosByVisita(visitaId) {
-    return (this.data.fotos || []).filter(f => f.visita_id === visitaId);
+  async aumentoPreciosMasivo(porcentaje) {
+    const db = getClient();
+    const result = await db.execute({
+      sql: `UPDATE clientes SET precio_abono = ROUND(precio_abono * (1.0 + ? / 100.0)), updated_at = ?
+            WHERE activo = 1 AND estado = 'activo' AND precio_abono IS NOT NULL AND precio_abono > 0`,
+      args: [porcentaje, now()]
+    });
+    return { updated: Number(result.rowsAffected) };
   }
 
-  async saveFoto({ visita_id, tipo, data }) {
-    const id = this.nextIds.fotos++;
-    const foto = {
-      id,
-      visita_id,
-      tipo: tipo || 'general',
-      ruta_archivo: data,
-      uploaded_at: new Date().toISOString()
-    };
-
-    this.data.fotos.push(foto);
-    this.save();
-    return id;
-  }
-
-  // ==================== VISITAS (Visits) ====================
+  // ==================== VISITAS ====================
 
   async getAllVisitas(limit = 200) {
-    let visitas = this.data.visitas || [];
-
-    // Enrich with client info (join)
-    visitas = visitas.map(v => {
-      const cliente = (this.data.clientes || []).find(c => c.id === v.cliente_id);
-      return {
-        ...v,
-        cliente_nombre: cliente?.nombre,
-        cliente_direccion: cliente?.direccion
-      };
+    const db = getClient();
+    const result = await db.execute({
+      sql: `SELECT v.*, c.nombre as cliente_nombre, c.direccion as cliente_direccion
+            FROM visitas v LEFT JOIN clientes c ON v.cliente_id = c.id
+            ORDER BY v.fecha DESC, v.id DESC LIMIT ?`,
+      args: [limit]
     });
-
-    // Sort by date DESC
-    visitas.sort((a, b) => {
-      const aDate = new Date(b.fecha || 0);
-      const bDate = new Date(a.fecha || 0);
-      return aDate - bDate;
-    });
-
-    return visitas.slice(0, limit);
+    return rowsToObjs(result.rows);
   }
 
   async getVisitasByCliente(clienteId) {
-    const visitas = (this.data.visitas || []).filter(v => v.cliente_id === clienteId);
-    visitas.sort((a, b) => {
-      const aDate = new Date(b.fecha || 0);
-      const bDate = new Date(a.fecha || 0);
-      return aDate - bDate;
+    const db = getClient();
+    const result = await db.execute({
+      sql: 'SELECT * FROM visitas WHERE cliente_id = ? ORDER BY fecha DESC, id DESC',
+      args: [toInt(clienteId)]
     });
-    return visitas;
+    return rowsToObjs(result.rows);
   }
 
   async getVisitasByFecha(fecha) {
-    const visitas = (this.data.visitas || []).filter(v => v.fecha === fecha);
-    visitas.sort((a, b) => {
-      const aTime = a.hora_inicio || '00:00';
-      const bTime = b.hora_inicio || '00:00';
-      return aTime.localeCompare(bTime);
+    const db = getClient();
+    const result = await db.execute({
+      sql: 'SELECT * FROM visitas WHERE fecha = ? ORDER BY hora_inicio ASC',
+      args: [fecha]
     });
-    return visitas;
+    return rowsToObjs(result.rows);
+  }
+
+  async getVisitaById(id) {
+    const db = getClient();
+    const result = await db.execute({ sql: 'SELECT * FROM visitas WHERE id = ?', args: [toInt(id)] });
+    return result.rows.length > 0 ? rowToObj(result.rows[0]) : null;
   }
 
   async createVisita(data) {
+    const db = getClient();
     const {
-      cliente_id,
-      fecha,
-      hora_inicio,
-      hora_fin,
-      tareas_realizadas,
-      cloro_ppm,
-      ph,
-      quimicos_usados,
-      observaciones,
-      extras
+      cliente_id, fecha, hora_inicio, hora_fin, tareas_realizadas,
+      cloro_ppm, ph, quimicos_usados, observaciones, extras
     } = data;
 
-    const id = this.nextIds.visitas++;
-    const visita = {
-      id,
-      cliente_id,
-      fecha,
-      hora_inicio: hora_inicio || null,
-      hora_fin: hora_fin || null,
-      tareas_realizadas: typeof tareas_realizadas === 'string' ? tareas_realizadas : (tareas_realizadas ? JSON.stringify(tareas_realizadas) : null),
-      cloro_ppm: cloro_ppm || null,
-      ph: ph || null,
-      quimicos_usados: typeof quimicos_usados === 'string' ? quimicos_usados : (quimicos_usados ? JSON.stringify(quimicos_usados) : null),
-      observaciones: observaciones || null,
-      extras: typeof extras === 'string' ? extras : (extras ? JSON.stringify(extras) : JSON.stringify([])),
-      sincronizada: 0,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+    const quimicosStr = typeof quimicos_usados === 'string'
+      ? quimicos_usados
+      : JSON.stringify(quimicos_usados || []);
+    const extrasStr = typeof extras === 'string'
+      ? extras
+      : JSON.stringify(extras || []);
+    const tareasStr = typeof tareas_realizadas === 'string'
+      ? tareas_realizadas
+      : (tareas_realizadas ? JSON.stringify(tareas_realizadas) : null);
 
-    this.data.visitas.push(visita);
+    const result = await db.execute({
+      sql: `INSERT INTO visitas (cliente_id, fecha, hora_inicio, hora_fin, tareas_realizadas,
+            cloro_ppm, ph, quimicos_usados, observaciones, extras, sincronizada, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      args: [toInt(cliente_id), fecha, hora_inicio || null, hora_fin || null, tareasStr,
+             cloro_ppm || null, ph || null, quimicosStr, observaciones || null, extrasStr,
+             now(), now()]
+    });
 
-    // Auto-descuento de inventario basado en quimicos usados
-    const quimicosRaw = typeof quimicos_usados === 'string'
-      ? JSON.parse(quimicos_usados || '{}')
-      : (quimicos_usados || {});
-
-    const QUIMICO_MAP = {
-      cloroGranulado: 'cloro granulado',
-      cloroLiquido: 'cloro líquido',
-      phMas: 'ph+',
-      phMenos: 'ph−',
-      algicida: 'algicida',
-      floculante: 'floculante',
-    };
-
-    for (const [clave, nombre] of Object.entries(QUIMICO_MAP)) {
-      const cant = parseFloat(quimicosRaw[clave]);
-      if (!cant || cant <= 0) continue;
-      try {
-        const insumo = (this.data.inventario || []).find(i =>
-          i.nombre.toLowerCase().includes(nombre.toLowerCase())
-        );
-        if (!insumo) continue;
-
-        insumo.stock_actual = Math.max(0, insumo.stock_actual - cant);
-        insumo.updated_at = new Date().toISOString();
-
-        await this.registrarMovimiento({
-          insumo_id: insumo.id,
-          tipo: 'uso',
-          cantidad: -cant,
-          origen: 'visita',
-          referencia_id: id,
-          fecha: fecha,
-        });
-      } catch (err) {
-        console.warn(`[auto-stock] No se pudo descontar ${nombre}:`, err.message);
-      }
-    }
-
-    this.save();
-    return visita;
+    return this.getVisitaById(Number(result.lastInsertRowid));
   }
 
   async updateVisita(id, data) {
+    const db = getClient();
     const allowedFields = [
-      'hora_inicio',
-      'hora_fin',
-      'tareas_realizadas',
-      'cloro_ppm',
-      'ph',
-      'quimicos_usados',
-      'observaciones',
-      'sincronizada'
+      'hora_inicio', 'hora_fin', 'tareas_realizadas', 'cloro_ppm',
+      'ph', 'quimicos_usados', 'observaciones', 'sincronizada'
     ];
 
-    const visitaIdx = this.data.visitas.findIndex(v => v.id === id);
-    if (visitaIdx < 0) return null;
-
+    const updates = [];
+    const args = [];
     for (const [key, value] of Object.entries(data)) {
       if (allowedFields.includes(key)) {
+        updates.push(`${key} = ?`);
         if (key === 'tareas_realizadas' || key === 'quimicos_usados') {
-          this.data.visitas[visitaIdx][key] = typeof value === 'string' ? value : (value ? JSON.stringify(value) : null);
+          args.push(typeof value === 'string' ? value : (value ? JSON.stringify(value) : null));
         } else {
-          this.data.visitas[visitaIdx][key] = value;
+          args.push(value);
         }
       }
     }
 
-    this.data.visitas[visitaIdx].updated_at = new Date().toISOString();
-    this.save();
-    return this.data.visitas[visitaIdx];
+    if (updates.length > 0) {
+      updates.push('updated_at = ?');
+      args.push(now());
+      args.push(toInt(id));
+      await db.execute({ sql: `UPDATE visitas SET ${updates.join(', ')} WHERE id = ?`, args });
+    }
+
+    return this.getVisitaById(toInt(id));
   }
 
   async deleteVisita(id) {
-    this.data.visitas = (this.data.visitas || []).filter(v => v.id !== id);
-    this.save();
+    const db = getClient();
+    await db.execute({ sql: 'DELETE FROM visitas WHERE id = ?', args: [toInt(id)] });
   }
 
-  // ==================== PAGOS (Payments) ====================
+  // ==================== FOTOS ====================
 
-  async createPago({ cliente_id, monto, fecha, metodo_pago, estado, mes, tipo_abono }) {
-    const id = this.nextIds.pagos++;
-    const pago = {
-      id,
-      cliente_id,
-      monto,
-      fecha: fecha || new Date().toISOString().split('T')[0],
-      metodo_pago: metodo_pago || 'efectivo',
-      estado: estado || 'pagado',
-      mes: mes || null,
-      tipo_abono: tipo_abono || null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    this.data.pagos.push(pago);
-    this.save();
-    return pago;
+  async getFotosByVisita(visitaId) {
+    const db = getClient();
+    const result = await db.execute({ sql: 'SELECT * FROM fotos WHERE visita_id = ?', args: [toInt(visitaId)] });
+    return rowsToObjs(result.rows);
   }
 
-  async getAllPagos(limit = 500) {
-    let pagos = this.data.pagos || [];
-
-    // Enrich with client info
-    pagos = pagos.map(p => {
-      const cliente = (this.data.clientes || []).find(c => c.id === p.cliente_id);
-      return {
-        ...p,
-        cliente_nombre: cliente?.nombre,
-        cliente_direccion: cliente?.direccion
-      };
+  async saveFoto({ visita_id, tipo, data }) {
+    const db = getClient();
+    const result = await db.execute({
+      sql: 'INSERT INTO fotos (visita_id, tipo, ruta_archivo, uploaded_at) VALUES (?, ?, ?, ?)',
+      args: [toInt(visita_id), tipo || 'general', data, now()]
     });
-
-    // Sort by date DESC
-    pagos.sort((a, b) => {
-      const aDate = new Date(b.fecha || 0);
-      const bDate = new Date(a.fecha || 0);
-      return aDate - bDate;
-    });
-
-    return pagos.slice(0, limit);
-  }
-
-  async getPagosByCliente(clienteId) {
-    const pagos = (this.data.pagos || []).filter(p => p.cliente_id === clienteId);
-    pagos.sort((a, b) => {
-      const aDate = new Date(b.fecha || 0);
-      const bDate = new Date(a.fecha || 0);
-      return aDate - bDate;
-    });
-    return pagos;
-  }
-
-  async updatePago(id, data) {
-    const allowed = ['monto', 'fecha', 'metodo_pago', 'estado', 'mes', 'tipo_abono'];
-
-    const pagoIdx = this.data.pagos.findIndex(p => p.id === id);
-    if (pagoIdx < 0) return null;
-
-    for (const [key, value] of Object.entries(data)) {
-      if (allowed.includes(key)) {
-        this.data.pagos[pagoIdx][key] = value;
-      }
-    }
-
-    this.data.pagos[pagoIdx].updated_at = new Date().toISOString();
-    this.save();
-    return this.data.pagos[pagoIdx];
-  }
-
-  async deletePago(id) {
-    this.data.pagos = (this.data.pagos || []).filter(p => p.id !== id);
-    this.save();
+    return Number(result.lastInsertRowid);
   }
 
   // ==================== FOTOS CLIENTES ====================
 
   async getFotosCliente(clienteId) {
-    return (this.data.fotos_clientes || []).filter(f => f.cliente_id === clienteId);
+    const db = getClient();
+    const result = await db.execute({ sql: 'SELECT * FROM fotos_clientes WHERE cliente_id = ?', args: [toInt(clienteId)] });
+    return rowsToObjs(result.rows);
   }
 
   async saveFotoCliente({ cliente_id, tipo, data }) {
-    const id = this.nextIds.fotos_clientes++;
-    const foto = {
-      id,
-      cliente_id,
-      tipo: tipo || null,
-      ruta_archivo: data,
-      created_at: new Date().toISOString()
-    };
-
-    this.data.fotos_clientes.push(foto);
-    this.save();
-    return foto;
+    const db = getClient();
+    const result = await db.execute({
+      sql: 'INSERT INTO fotos_clientes (cliente_id, tipo, ruta_archivo, created_at) VALUES (?, ?, ?, ?)',
+      args: [toInt(cliente_id), tipo || null, data, now()]
+    });
+    const id = Number(result.lastInsertRowid);
+    const foto = await db.execute({ sql: 'SELECT * FROM fotos_clientes WHERE id = ?', args: [id] });
+    return rowToObj(foto.rows[0]);
   }
 
   async deleteFotoCliente(id) {
-    this.data.fotos_clientes = (this.data.fotos_clientes || []).filter(f => f.id !== id);
-    this.save();
+    const db = getClient();
+    await db.execute({ sql: 'DELETE FROM fotos_clientes WHERE id = ?', args: [toInt(id)] });
   }
 
-  async aumentoPreciosMasivo(porcentaje) {
-    let updated = 0;
-    for (const cliente of this.data.clientes || []) {
-      if (cliente.activo && cliente.estado === 'activo' && cliente.precio_abono && cliente.precio_abono > 0) {
-        cliente.precio_abono = Math.round(cliente.precio_abono * (1.0 + porcentaje / 100.0));
-        cliente.updated_at = new Date().toISOString();
-        updated++;
-      }
+  // ==================== PAGOS ====================
+
+  async createPago({ cliente_id, monto, fecha, metodo_pago, estado, mes, tipo_abono }) {
+    const db = getClient();
+    const result = await db.execute({
+      sql: `INSERT INTO pagos (cliente_id, monto, fecha, metodo_pago, estado, mes, tipo_abono, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [toInt(cliente_id), monto, fecha || now().split('T')[0],
+             metodo_pago || 'efectivo', estado || 'pagado', mes || null, tipo_abono || null, now(), now()]
+    });
+    const id = Number(result.lastInsertRowid);
+    const pago = await db.execute({ sql: 'SELECT * FROM pagos WHERE id = ?', args: [id] });
+    return rowToObj(pago.rows[0]);
+  }
+
+  async getAllPagos(limit = 500) {
+    const db = getClient();
+    const result = await db.execute({
+      sql: `SELECT p.*, c.nombre as cliente_nombre, c.direccion as cliente_direccion
+            FROM pagos p LEFT JOIN clientes c ON p.cliente_id = c.id
+            ORDER BY p.fecha DESC LIMIT ?`,
+      args: [limit]
+    });
+    return rowsToObjs(result.rows);
+  }
+
+  async getPagosByCliente(clienteId) {
+    const db = getClient();
+    const result = await db.execute({
+      sql: 'SELECT * FROM pagos WHERE cliente_id = ? ORDER BY fecha DESC',
+      args: [toInt(clienteId)]
+    });
+    return rowsToObjs(result.rows);
+  }
+
+  async updatePago(id, data) {
+    const db = getClient();
+    const allowed = ['monto', 'fecha', 'metodo_pago', 'estado', 'mes', 'tipo_abono'];
+    const updates = [];
+    const args = [];
+    for (const [key, value] of Object.entries(data)) {
+      if (allowed.includes(key)) { updates.push(`${key} = ?`); args.push(value); }
     }
-    this.save();
-    return { updated };
+
+    if (updates.length > 0) {
+      updates.push('updated_at = ?'); args.push(now()); args.push(toInt(id));
+      await db.execute({ sql: `UPDATE pagos SET ${updates.join(', ')} WHERE id = ?`, args });
+    }
+
+    const pago = await db.execute({ sql: 'SELECT * FROM pagos WHERE id = ?', args: [toInt(id)] });
+    return rowToObj(pago.rows[0]);
+  }
+
+  async deletePago(id) {
+    const db = getClient();
+    await db.execute({ sql: 'DELETE FROM pagos WHERE id = ?', args: [toInt(id)] });
   }
 
   // ==================== INVENTARIO ====================
 
   async getAllInventario() {
-    const inventario = this.data.inventario || [];
-    return inventario.sort((a, b) => a.nombre.localeCompare(b.nombre));
+    const db = getClient();
+    const result = await db.execute('SELECT * FROM inventario ORDER BY nombre ASC');
+    return rowsToObjs(result.rows);
   }
 
   async getInventarioById(id) {
-    return (this.data.inventario || []).find(i => i.id === id) || null;
+    const db = getClient();
+    const result = await db.execute({ sql: 'SELECT * FROM inventario WHERE id = ?', args: [toInt(id)] });
+    return result.rows.length > 0 ? rowToObj(result.rows[0]) : null;
   }
 
   async createInventario(data) {
+    const db = getClient();
     const { nombre, unidad, stock_actual, stock_minimo, precio_unitario } = data;
-
-    const id = this.nextIds.inventario++;
-    const item = {
-      id,
-      nombre,
-      unidad: unidad || 'g',
-      stock_actual: stock_actual || 0,
-      stock_minimo: stock_minimo || 0,
-      precio_unitario: precio_unitario || null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    this.data.inventario.push(item);
-    this.save();
-    return item;
+    const result = await db.execute({
+      sql: `INSERT INTO inventario (nombre, unidad, stock_actual, stock_minimo, precio_unitario, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [nombre, unidad || 'g', stock_actual || 0, stock_minimo || 0, precio_unitario || null, now(), now()]
+    });
+    return this.getInventarioById(Number(result.lastInsertRowid));
   }
 
   async updateInventario(id, data) {
+    const db = getClient();
     const allowed = ['nombre', 'unidad', 'stock_actual', 'stock_minimo', 'precio_unitario'];
-
-    const itemIdx = this.data.inventario.findIndex(i => i.id === id);
-    if (itemIdx < 0) return null;
-
+    const updates = [];
+    const args = [];
     for (const [key, value] of Object.entries(data)) {
-      if (allowed.includes(key)) {
-        this.data.inventario[itemIdx][key] = value;
-      }
+      if (allowed.includes(key)) { updates.push(`${key} = ?`); args.push(value); }
     }
 
-    this.data.inventario[itemIdx].updated_at = new Date().toISOString();
-    this.save();
-    return this.data.inventario[itemIdx];
+    if (updates.length > 0) {
+      updates.push('updated_at = ?'); args.push(now()); args.push(toInt(id));
+      await db.execute({ sql: `UPDATE inventario SET ${updates.join(', ')} WHERE id = ?`, args });
+    }
+
+    return this.getInventarioById(toInt(id));
   }
 
   async ajustarStock(id, cantidad, visita_id = null) {
-    const itemIdx = this.data.inventario.findIndex(i => i.id === id);
-    if (itemIdx < 0) return null;
-
-    this.data.inventario[itemIdx].stock_actual = Math.max(0, this.data.inventario[itemIdx].stock_actual + cantidad);
-    this.data.inventario[itemIdx].updated_at = new Date().toISOString();
+    const db = getClient();
+    await db.execute({
+      sql: 'UPDATE inventario SET stock_actual = MAX(0, stock_actual + ?), updated_at = ? WHERE id = ?',
+      args: [cantidad, now(), toInt(id)]
+    });
 
     await this.registrarMovimiento({
-      insumo_id: id,
+      insumo_id: toInt(id),
       tipo: cantidad > 0 ? 'compra' : 'uso',
       cantidad,
-      origen: 'manual',
-      visita_id: visita_id,
+      origen: visita_id ? 'visita' : 'manual',
+      visita_id,
       fecha: new Date().toISOString().split('T')[0],
     });
 
-    this.save();
-    return this.data.inventario[itemIdx];
-  }
-
-  parseQuimicos(raw) {
-    if (!raw) return [];
-
-    try {
-      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-
-      if (Array.isArray(parsed)) return parsed;
-
-      const viejo = parsed;
-      const nuevo = [];
-
-      const MAPPING = {
-        cloroGranulado: { id: 1, nombre: 'Cloro Granulado', unidad: 'g' },
-        cloroLiquido: { id: 2, nombre: 'Cloro Líquido', unidad: 'ml' },
-        phMas: { id: 3, nombre: 'pH+', unidad: 'g' },
-        phMenos: { id: 4, nombre: 'pH−', unidad: 'ml' },
-        algicida: { id: 5, nombre: 'Algicida', unidad: 'ml' },
-        floculante: { id: 6, nombre: 'Floculante', unidad: 'ml' },
-      };
-
-      for (const [clave, info] of Object.entries(MAPPING)) {
-        if (viejo[clave] && viejo[clave] > 0) {
-          nuevo.push({
-            insumo_id: info.id,
-            nombre: info.nombre,
-            cantidad: viejo[clave],
-            unidad: info.unidad,
-          });
-        }
-      }
-
-      return nuevo;
-    } catch (e) {
-      console.error('[database] parseQuimicos error:', e.message);
-      return [];
-    }
-  }
-
-  validateInsumoStock(insumo_id, cantidad) {
-    return new Promise((resolve) => {
-      const insumo = (this.data.inventario || []).find(i => i.id === insumo_id);
-      if (!insumo) {
-        resolve({ hasStock: false, stockDisponible: 0, error: 'Insumo no existe' });
-      } else {
-        const hasStock = insumo.stock_actual >= cantidad;
-        resolve({ hasStock, stockDisponible: insumo.stock_actual });
-      }
-    });
+    return this.getInventarioById(toInt(id));
   }
 
   async deleteInventario(id) {
-    this.data.inventario = (this.data.inventario || []).filter(i => i.id !== id);
-    this.save();
+    const db = getClient();
+    await db.execute({ sql: 'DELETE FROM inventario WHERE id = ?', args: [toInt(id)] });
   }
 
-  // ==================== MOVIMIENTOS INVENTARIO ====================
+  async validateInsumoStock(insumo_id, cantidad) {
+    const insumo = await this.getInventarioById(insumo_id);
+    if (!insumo) return { hasStock: false, stockDisponible: 0, error: 'Insumo no existe' };
+    return { hasStock: insumo.stock_actual >= cantidad, stockDisponible: insumo.stock_actual };
+  }
+
+  // ==================== MOVIMIENTOS ====================
 
   async registrarMovimiento({ insumo_id, tipo, cantidad, origen, referencia_id, visita_id, fecha }) {
+    const db = getClient();
     const finalOrigen = visita_id ? 'visita' : (origen || 'manual');
     const finalReferencia = visita_id || referencia_id || null;
 
-    const id = this.nextIds.movimientos_inventario++;
-    const movimiento = {
-      id,
-      insumo_id,
-      tipo,
-      cantidad,
-      origen: finalOrigen,
-      referencia_id: finalReferencia,
-      fecha: fecha || new Date().toISOString().split('T')[0],
-      created_at: new Date().toISOString()
-    };
-
-    this.data.movimientos_inventario.push(movimiento);
-    this.save();
+    await db.execute({
+      sql: `INSERT INTO movimientos_inventario (insumo_id, tipo, cantidad, origen, referencia_id, fecha, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [toInt(insumo_id), tipo, cantidad, finalOrigen,
+             finalReferencia ? toInt(finalReferencia) : null,
+             fecha || new Date().toISOString().split('T')[0], now()]
+    });
   }
 
   async getMovimientosByInsumo(insumoId, limit = 50) {
-    let movimientos = (this.data.movimientos_inventario || []).filter(m => m.insumo_id === insumoId);
-    movimientos.sort((a, b) => {
-      const aDate = new Date(b.fecha || 0);
-      const bDate = new Date(a.fecha || 0);
-      return aDate - bDate;
+    const db = getClient();
+    const result = await db.execute({
+      sql: 'SELECT * FROM movimientos_inventario WHERE insumo_id = ? ORDER BY fecha DESC, id DESC LIMIT ?',
+      args: [toInt(insumoId), limit]
     });
-    return movimientos.slice(0, limit);
+    return rowsToObjs(result.rows);
   }
 
   // ==================== CONFIGURACION ====================
 
   async getConfig(clave) {
-    const config = (this.data.configuracion || []).find(c => c.clave === clave);
-    return config ? config.valor : null;
+    const db = getClient();
+    const result = await db.execute({ sql: 'SELECT valor FROM configuracion WHERE clave = ?', args: [clave] });
+    return result.rows.length > 0 ? result.rows[0].valor : null;
   }
 
   async getAllConfig() {
-    const rows = this.data.configuracion || [];
-    return rows.reduce((acc, r) => { acc[r.clave] = r.valor; return acc; }, {});
+    const db = getClient();
+    const result = await db.execute('SELECT * FROM configuracion');
+    return result.rows.reduce((acc, r) => { acc[r.clave] = r.valor; return acc; }, {});
   }
 
   async setConfig(clave, valor) {
-    const idx = (this.data.configuracion || []).findIndex(c => c.clave === clave);
-
-    if (idx >= 0) {
-      this.data.configuracion[idx].valor = valor;
-    } else {
-      this.data.configuracion.push({ clave, valor });
-    }
-
-    this.save();
+    const db = getClient();
+    await db.execute({
+      sql: 'INSERT INTO configuracion (clave, valor) VALUES (?, ?) ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor',
+      args: [clave, valor]
+    });
     return { clave, valor };
   }
 
   // ==================== GASTOS ====================
 
   async createGasto({ descripcion, monto, fecha, categoria }) {
-    const id = this.nextIds.gastos++;
-    const gasto = {
-      id,
-      descripcion,
-      monto,
-      fecha: fecha || new Date().toISOString().split('T')[0],
-      categoria: categoria || 'otros',
-      created_at: new Date().toISOString()
-    };
-
-    this.data.gastos.push(gasto);
-    this.save();
-    return gasto;
+    const db = getClient();
+    const result = await db.execute({
+      sql: 'INSERT INTO gastos (descripcion, monto, fecha, categoria, created_at) VALUES (?, ?, ?, ?, ?)',
+      args: [descripcion, monto, fecha || new Date().toISOString().split('T')[0], categoria || 'otros', now()]
+    });
+    const id = Number(result.lastInsertRowid);
+    const gasto = await db.execute({ sql: 'SELECT * FROM gastos WHERE id = ?', args: [id] });
+    return rowToObj(gasto.rows[0]);
   }
 
   async getAllGastos(limit = 500) {
-    let gastos = this.data.gastos || [];
-    gastos.sort((a, b) => {
-      const aDate = new Date(b.fecha || 0);
-      const bDate = new Date(a.fecha || 0);
-      return aDate - bDate;
-    });
-    return gastos.slice(0, limit);
+    const db = getClient();
+    const result = await db.execute({ sql: 'SELECT * FROM gastos ORDER BY fecha DESC LIMIT ?', args: [limit] });
+    return rowsToObjs(result.rows);
   }
 
   async deleteGasto(id) {
-    this.data.gastos = (this.data.gastos || []).filter(g => g.id !== id);
-    this.save();
+    const db = getClient();
+    await db.execute({ sql: 'DELETE FROM gastos WHERE id = ?', args: [toInt(id)] });
   }
 
   // ==================== SYNC ====================
 
   async getUnsynced() {
-    return (this.data.visitas || []).filter(v => v.sincronizada === 0);
+    const db = getClient();
+    const result = await db.execute('SELECT * FROM visitas WHERE sincronizada = 0');
+    return rowsToObjs(result.rows);
   }
 
   async markSynced(visitaId) {
-    const visitaIdx = this.data.visitas.findIndex(v => v.id === visitaId);
-    if (visitaIdx < 0) return null;
+    const db = getClient();
+    await db.execute({
+      sql: 'UPDATE visitas SET sincronizada = 1, updated_at = ? WHERE id = ?',
+      args: [now(), toInt(visitaId)]
+    });
+    return this.getVisitaById(toInt(visitaId));
+  }
 
-    this.data.visitas[visitaIdx].sincronizada = 1;
-    this.data.visitas[visitaIdx].updated_at = new Date().toISOString();
-    this.save();
-    return this.data.visitas[visitaIdx];
+  // ==================== BACKWARD COMPAT ====================
+
+  parseQuimicos(raw) {
+    if (!raw) return [];
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (Array.isArray(parsed)) return parsed;
+
+      const MAPPING = {
+        cloroGranulado: { id: 1, nombre: 'Cloro Granulado', unidad: 'g' },
+        cloroLiquido:   { id: 2, nombre: 'Cloro Líquido',   unidad: 'ml' },
+        phMas:          { id: 3, nombre: 'pH+',             unidad: 'g' },
+        phMenos:        { id: 4, nombre: 'pH−',             unidad: 'ml' },
+        algicida:       { id: 5, nombre: 'Algicida',        unidad: 'ml' },
+        floculante:     { id: 6, nombre: 'Floculante',      unidad: 'ml' },
+      };
+
+      return Object.entries(MAPPING)
+        .filter(([clave]) => parsed[clave] && parsed[clave] > 0)
+        .map(([clave, info]) => ({
+          insumo_id: info.id,
+          nombre: info.nombre,
+          cantidad: parsed[clave],
+          unidad: info.unidad,
+        }));
+    } catch (e) {
+      return [];
+    }
   }
 }
 
-// Create and export singleton instance
-const databaseService = new DatabaseService(join(__dirname, '../data.json'));
+const databaseService = new DatabaseService();
 export default databaseService;

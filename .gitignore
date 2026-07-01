@@ -62,3 +62,6 @@ temp/
 *.sqlite
 *.sqlite3
 backend/data.json
+
+# Credentials
+token turso DB.txt

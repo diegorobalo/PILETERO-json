@@ -6,18 +6,8 @@
 
 import axios from 'axios';
 
-// Detectar la URL base de la API según el ambiente
-const getBaseURL = () => {
-  // En producción, usa la URL de Vercel
-  if (import.meta.env.PROD) {
-    return 'https://piletero-json-backend-o50aok7dg-rockman-x10.vercel.app/api';
-  }
-  // En desarrollo, usa localhost
-  return 'http://localhost:5000/api';
-};
-
 const axiosInstance = axios.create({
-  baseURL: getBaseURL(),
+  baseURL: '/api',
   timeout: 5000,
   headers: {
     'Content-Type': 'application/json',

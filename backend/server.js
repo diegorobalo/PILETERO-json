@@ -1,9 +1,10 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cron from 'node-cron';
-import { readFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
+import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { networkInterfaces } from 'os';
@@ -39,20 +40,21 @@ function startServer() {
     const localIP = ifaces[0]?.address || 'TU_IP';
     console.log(`\n✅ PILETERO corriendo en http://localhost:${PORT}`);
     console.log(`📱 Celular: http://${localIP}:${PORT}\n`);
-    console.log('Storage: JSON (data.json) - Vercel compatible\n');
+    console.log('Storage: Turso (cloud SQLite)\n');
   });
 }
 
-// Initialize JSON-based storage (Vercel-compatible, no SQLite)
-try {
-  databaseService.init();
-  console.log('JSON data storage initialized');
-  syncService.init();
-  startServer();
-} catch (err) {
-  console.error('Error initializing data storage:', err);
-  process.exit(1);
-}
+// Initialize Turso database then start server
+(async () => {
+  try {
+    await databaseService.init();
+    syncService.init();
+    startServer();
+  } catch (err) {
+    console.error('Error initializing database:', err);
+    process.exit(1);
+  }
+})();
 
 // ==================== REST API ENDPOINTS ====================
 
