@@ -93,13 +93,13 @@ export default function AgendaPage() {
   const [config, setConfigLocal] = useState({}); // WhatsApp config
 
   async function cargarDatos() {
+    let apiOk = false;
     try {
       setLoading(true);
       await storageService.init();
 
       // Intentar desde la API primero (Turso es la fuente de verdad en la nube)
       let todos = [];
-      let apiOk = false;
       try {
         const fromAPI = await apiClient.getClientes();
         apiOk = true;
@@ -165,6 +165,7 @@ export default function AgendaPage() {
     } finally {
       setLoading(false);
     }
+    return apiOk;
   }
 
   function guardarOverrides(newIds) {
@@ -247,8 +248,9 @@ export default function AgendaPage() {
   async function handleSync() {
     setIsSyncing(true);
     try {
-      await cargarDatos();
-      toastSuccess('Datos actualizados');
+      const ok = await cargarDatos();
+      if (ok) toastSuccess('Datos actualizados');
+      else toastError('Sin conexión a la nube');
     } finally {
       setIsSyncing(false);
     }
@@ -276,8 +278,13 @@ export default function AgendaPage() {
 
   useEffect(() => {
     cargarDatos();
+    const goOffline = () => setSyncStatus('offline');
     window.addEventListener('online', cargarDatos);
-    return () => window.removeEventListener('online', cargarDatos);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', cargarDatos);
+      window.removeEventListener('offline', goOffline);
+    };
   }, []);
 
   const clientesDeHoy = todosClientes

@@ -89,9 +89,8 @@ export default function VisitasPage() {
   function handleAgregarInsumo(insumo) {
     const idx = quimicosUsados.findIndex(q => q.insumo_id === insumo.insumo_id)
     if (idx >= 0) {
-      // Si ya existe, sumar la cantidad al entry existente
       const updated = [...quimicosUsados]
-      updated[idx] = { ...updated[idx], cantidad: updated[idx].cantidad + insumo.cantidad }
+      updated[idx] = { ...updated[idx], cantidad: parseFloat(updated[idx].cantidad) + parseFloat(insumo.cantidad) }
       setQuimicosUsados(updated)
     } else {
       setQuimicosUsados([...quimicosUsados, insumo])
@@ -214,7 +213,7 @@ export default function VisitasPage() {
           {[['agenda', '📅 Agenda hoy'], ['historial', '📋 Historial'], ['nueva', '✏️ Registrar']].map(([id, label]) => (
             <button
               key={id}
-              onClick={() => setVistaActual(id)}
+              onClick={() => { if (id === 'nueva') resetForm(); else setEditandoVisitaId(null); setVistaActual(id) }}
               className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${vistaActual === id ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               {label}

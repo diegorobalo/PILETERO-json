@@ -299,7 +299,7 @@ class DatabaseService {
     const db = getClient();
     const allowedFields = [
       'hora_inicio', 'hora_fin', 'tareas_realizadas', 'cloro_ppm',
-      'ph', 'quimicos_usados', 'observaciones', 'sincronizada'
+      'ph', 'quimicos_usados', 'observaciones', 'sincronizada', 'extras'
     ];
 
     const updates = [];
@@ -307,8 +307,8 @@ class DatabaseService {
     for (const [key, value] of Object.entries(data)) {
       if (allowedFields.includes(key)) {
         updates.push(`${key} = ?`);
-        if (key === 'tareas_realizadas' || key === 'quimicos_usados') {
-          args.push(typeof value === 'string' ? value : (value ? JSON.stringify(value) : null));
+        if (key === 'tareas_realizadas' || key === 'quimicos_usados' || key === 'extras') {
+          args.push(typeof value === 'string' ? value : (value != null ? JSON.stringify(value) : null));
         } else {
           args.push(value);
         }
