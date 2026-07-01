@@ -87,13 +87,15 @@ export default function VisitasPage() {
   }
 
   function handleAgregarInsumo(insumo) {
-    // Evitar duplicados
-    const exists = quimicosUsados.some(q => q.insumo_id === insumo.insumo_id)
-    if (exists) {
-      alert('Ese insumo ya está en la lista')
-      return
+    const idx = quimicosUsados.findIndex(q => q.insumo_id === insumo.insumo_id)
+    if (idx >= 0) {
+      // Si ya existe, sumar la cantidad al entry existente
+      const updated = [...quimicosUsados]
+      updated[idx] = { ...updated[idx], cantidad: updated[idx].cantidad + insumo.cantidad }
+      setQuimicosUsados(updated)
+    } else {
+      setQuimicosUsados([...quimicosUsados, insumo])
     }
-    setQuimicosUsados([...quimicosUsados, insumo])
   }
 
   function handleAgregarExtra() {
