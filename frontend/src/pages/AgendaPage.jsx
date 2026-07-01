@@ -91,6 +91,7 @@ export default function AgendaPage() {
   const [motivoSaltar, setMotivoSaltar] = useState('cliente_ausente');
   const [vistaMode, setVistaMode] = useState('hoy'); // 'hoy' | 'semana'
   const [config, setConfigLocal] = useState({}); // WhatsApp config
+  const [menuWA, setMenuWA] = useState(null); // clienteId con menú WA abierto
 
   async function cargarDatos() {
     let apiOk = false;
@@ -228,21 +229,22 @@ export default function AgendaPage() {
     setMotivoSaltar('cliente_ausente');
   }
 
-  function abrirWhatsApp(cliente) {
+  function abrirWhatsApp(cliente, tipo) {
     if (!cliente.telefono) {
       toastError('Este cliente no tiene teléfono registrado');
+      setMenuWA(null);
       return;
     }
-
-    const mensaje = config.mensaje_whatsapp_visita ||
-      'Hola {nombre_cliente}, hoy voy a hacer el servicio de mantenimiento en tu pileta. Confirma si está todo bien. Saludos!';
-
+    const defaults = {
+      visita: 'Hola {nombre_cliente}, hoy voy a hacer el servicio de mantenimiento en tu pileta. Confirma si está todo bien. Saludos!',
+      reprogramado: 'Hola {nombre_cliente}, el servicio va a ser reprogramado para otro día. Te aviso cuando.',
+    };
+    const clave = tipo === 'reprogramado' ? 'mensaje_whatsapp_reprogramado' : 'mensaje_whatsapp_visita';
+    const mensaje = config[clave] || defaults[tipo];
     const interpolated = interpolateMensaje(mensaje, cliente);
     const link = generateWhatsAppLink(cliente.telefono, interpolated);
-
-    if (link) {
-      window.open(link, '_blank');
-    }
+    if (link) window.open(link, '_blank');
+    setMenuWA(null);
   }
 
   async function handleSync() {
@@ -422,13 +424,34 @@ export default function AgendaPage() {
                   onStart={(id) => navigate(`/visita/${id}/${fecha}`)}
                 />
                 <div className="absolute top-2 right-2 flex gap-1">
-                  <button
-                    onClick={() => abrirWhatsApp(cliente)}
-                    className="bg-green-500 hover:bg-green-600 text-white rounded-full w-10 h-10 flex items-center justify-center text-lg shadow-md transition"
-                    title="Enviar WhatsApp"
-                  >
-                    💬
-                  </button>
+                  <div className="relative">
+                    <button
+                      onClick={() => setMenuWA(menuWA === cliente.id ? null : cliente.id)}
+                      className="bg-green-500 hover:bg-green-600 text-white rounded-full w-10 h-10 flex items-center justify-center text-lg shadow-md transition"
+                      title="Enviar WhatsApp"
+                    >
+                      💬
+                    </button>
+                    {menuWA === cliente.id && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setMenuWA(null)} />
+                        <div className="absolute right-0 top-12 z-20 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden w-48">
+                          <button
+                            onClick={() => abrirWhatsApp(cliente, 'visita')}
+                            className="w-full px-4 py-3 text-left text-sm font-medium text-gray-800 hover:bg-green-50 active:bg-green-100 flex items-center gap-2"
+                          >
+                            🏊 Voy hoy
+                          </button>
+                          <button
+                            onClick={() => abrirWhatsApp(cliente, 'reprogramado')}
+                            className="w-full px-4 py-3 text-left text-sm font-medium text-gray-800 hover:bg-orange-50 active:bg-orange-100 flex items-center gap-2 border-t border-gray-100"
+                          >
+                            📅 Reprogramando
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                   <button
                     onClick={() => quitarCliente(cliente.id)}
                     className="text-gray-300 hover:text-red-400 text-lg leading-none px-2"
