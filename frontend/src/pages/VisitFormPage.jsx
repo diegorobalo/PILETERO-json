@@ -202,7 +202,7 @@ export default function VisitFormPage() {
 
         {/* Lo que usaste */}
         <div className="mb-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-1">Lo que usaste</h2>
+          <h2 className="section-heading text-lg font-bold text-gray-900">Lo que usaste</h2>
           <p className="text-xs text-gray-400 mb-3">Agregá los insumos que aplicaste. Estos descuentan del stock.</p>
           {quimicosUsados.length > 0 ? (
             <div className="space-y-2 mb-3">
@@ -234,7 +234,7 @@ export default function VisitFormPage() {
         <PhotoUpload fotos={fotos} onAddFoto={handleAddFoto} onRemoveFoto={handleRemoveFoto} />
 
         <div className="mb-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Observaciones</h2>
+          <h2 className="section-heading text-lg font-bold text-gray-900">Observaciones</h2>
           <textarea
             value={observaciones}
             onChange={(e) => setObservaciones(e.target.value)}

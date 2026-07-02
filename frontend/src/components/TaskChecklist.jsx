@@ -29,7 +29,7 @@ export default function TaskChecklist({ tasks, onChange }) {
 
   return (
     <div className="mb-6">
-      <h2 className="text-lg font-bold text-gray-900 mb-4">Tareas Realizadas</h2>
+      <h2 className="section-heading text-lg font-bold text-gray-900">Tareas Realizadas</h2>
       <div className="space-y-2">
         {taskOptions.map((option) => {
           const isSelected = tasks.includes(option.id);

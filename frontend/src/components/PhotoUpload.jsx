@@ -93,7 +93,7 @@ export default function PhotoUpload({ fotos, onAddFoto, onRemoveFoto }) {
 
   return (
     <div className="mb-6">
-      <h2 className="text-lg font-bold text-gray-900 mb-4">📷 Fotos</h2>
+      <h2 className="section-heading text-lg font-bold text-gray-900">📷 Fotos</h2>
 
       <input ref={antesRef}   type="file" accept="image/*" onChange={handleChange('antes')}   className="hidden" />
       <input ref={despuesRef} type="file" accept="image/*" onChange={handleChange('despues')} className="hidden" />

@@ -100,26 +100,27 @@ export default function DashboardPage() {
         <>
           {/* Stats cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-2xl mb-1">👥</p>
-              <p className="text-3xl font-black text-gray-900">{clientes.length}</p>
-              <p className="text-sm text-gray-500 mt-1">Clientes activos</p>
-            </div>
-            <div className="bg-white rounded-xl border border-blue-200 p-5">
-              <p className="text-2xl mb-1">✅</p>
-              <p className="text-3xl font-black text-blue-700">{visitasMes.length}</p>
-              <p className="text-sm text-gray-500 mt-1">Visitas en {mesNombre}</p>
-            </div>
-            <div className="bg-white rounded-xl border border-green-200 p-5">
-              <p className="text-2xl mb-1">💰</p>
-              <p className="text-3xl font-black text-green-700">{formatCurrency(cobradoMes)}</p>
-              <p className="text-sm text-gray-500 mt-1">Cobrado {mesNombre}</p>
-            </div>
-            <div className={`bg-white rounded-xl border p-5 ${pendienteMes > 0 ? 'border-red-200' : 'border-gray-200'}`}>
-              <p className="text-2xl mb-1">{pendienteMes > 0 ? '⏳' : '🎉'}</p>
-              <p className={`text-3xl font-black ${pendienteMes > 0 ? 'text-red-600' : 'text-gray-400'}`}>{formatCurrency(pendienteMes)}</p>
-              <p className="text-sm text-gray-500 mt-1">Pendiente cobro</p>
-            </div>
+            {[
+              { emoji: '👥', value: clientes.length, label: 'Clientes activos', color: 'bg-sky-500', num: 'text-gray-900' },
+              { emoji: '✅', value: visitasMes.length, label: `Visitas en ${mesNombre}`, color: 'bg-violet-500', num: 'text-violet-700' },
+              { emoji: '💰', value: formatCurrency(cobradoMes), label: `Cobrado ${mesNombre}`, color: 'bg-green-500', num: 'text-green-700' },
+              {
+                emoji: pendienteMes > 0 ? '⏳' : '🎉',
+                value: formatCurrency(pendienteMes),
+                label: 'Pendiente cobro',
+                color: pendienteMes > 0 ? 'bg-red-500' : 'bg-gray-300',
+                num: pendienteMes > 0 ? 'text-red-600' : 'text-gray-400',
+              },
+            ].map(({ emoji, value, label, color, num }) => (
+              <div key={label} className="bg-white rounded-xl shadow-card overflow-hidden">
+                <div className={`h-1 ${color}`} />
+                <div className="p-5">
+                  <p className="text-2xl mb-2">{emoji}</p>
+                  <p className={`text-3xl font-black ${num}`}>{value}</p>
+                  <p className="text-sm text-gray-500 mt-1">{label}</p>
+                </div>
+              </div>
+            ))}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

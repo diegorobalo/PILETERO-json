@@ -313,22 +313,22 @@ export default function AgendaPage() {
     <div className="min-h-screen bg-sky-50 pb-24">
       {/* Header */}
       <div className="bg-gradient-to-br from-sky-700 to-cyan-600 sticky top-0 z-10">
-        <div className="px-4 pt-4 pb-2">
-          <div className="flex items-start justify-between mb-1">
-            <h1 className="text-xl font-bold text-white">Agenda del día</h1>
-            <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+        <div className="px-4 pt-5 pb-3">
+          <div className="flex items-start justify-between mb-0.5">
+            <h1 className="text-2xl font-black text-white tracking-tight">Agenda del día</h1>
+            <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold mt-0.5 ${
               syncStatus === 'online' ? 'bg-white/20 text-white' : 'bg-amber-400/30 text-amber-100'
             }`}>
               <span className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'online' ? 'bg-green-300' : 'bg-amber-300'}`} />
               {syncStatus === 'online' ? 'Conectado' : 'Sin conexión'}
             </span>
           </div>
-          <p className="text-sky-100 text-sm capitalize">{formatDateSpanish(fecha)}</p>
+          <p className="text-sky-100 text-sm capitalize mb-3">{formatDateSpanish(fecha)}</p>
           {clientesDeHoy.length > 0 && (
-            <div className="mt-3 flex items-center gap-3">
-              <div className="flex-1 bg-white/25 rounded-full h-1.5">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 bg-white/20 rounded-full h-2">
                 <div
-                  className="bg-white rounded-full h-1.5 transition-all"
+                  className="bg-white rounded-full h-2 transition-all duration-500"
                   style={{ width: clientesDeHoy.length ? `${(getCompletedCount() / clientesDeHoy.length) * 100}%` : '0%' }}
                 />
               </div>
@@ -427,45 +427,34 @@ export default function AgendaPage() {
                   hora={getClienteTime(cliente)}
                   estado={getClienteStatus(cliente.id)}
                   onStart={(id) => navigate(`/visita/${id}/${fecha}`)}
+                  onWhatsApp={() => setMenuWA(menuWA === cliente.id ? null : cliente.id)}
                 />
-                <div className="absolute top-2 right-2 flex gap-1">
-                  <div className="relative">
-                    <button
-                      onClick={() => setMenuWA(menuWA === cliente.id ? null : cliente.id)}
-                      className="bg-green-500 hover:bg-green-600 text-white rounded-full w-10 h-10 flex items-center justify-center text-lg shadow-md transition"
-                      title="Enviar WhatsApp"
-                    >
-                      💬
-                    </button>
-                    {menuWA === cliente.id && (
-                      <>
-                        <div className="fixed inset-0 z-10" onClick={() => setMenuWA(null)} />
-                        <div className="absolute right-0 top-12 z-20 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden w-48">
-                          <button
-                            onClick={() => abrirWhatsApp(cliente, 'visita')}
-                            className="w-full px-4 py-3 text-left text-sm font-medium text-gray-800 hover:bg-green-50 active:bg-green-100 flex items-center gap-2"
-                          >
-                            🏊 Voy hoy
-                          </button>
-                          <button
-                            onClick={() => abrirWhatsApp(cliente, 'reprogramado')}
-                            className="w-full px-4 py-3 text-left text-sm font-medium text-gray-800 hover:bg-orange-50 active:bg-orange-100 flex items-center gap-2 border-t border-gray-100"
-                          >
-                            📅 Reprogramando
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                {menuWA === cliente.id && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setMenuWA(null)} />
+                    <div className="absolute right-4 bottom-12 z-20 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden w-48">
+                      <button
+                        onClick={() => abrirWhatsApp(cliente, 'visita')}
+                        className="w-full px-4 py-3 text-left text-sm font-medium text-gray-800 hover:bg-green-50 active:bg-green-100 flex items-center gap-2"
+                      >
+                        🏊 Voy hoy
+                      </button>
+                      <button
+                        onClick={() => abrirWhatsApp(cliente, 'reprogramado')}
+                        className="w-full px-4 py-3 text-left text-sm font-medium text-gray-800 hover:bg-orange-50 active:bg-orange-100 flex items-center gap-2 border-t border-gray-100"
+                      >
+                        📅 Reprogramando
+                      </button>
+                    </div>
+                  </>
+                )}
+                <div className="flex items-center justify-between mt-1.5 px-1">
                   <button
                     onClick={() => quitarCliente(cliente.id)}
-                    className="text-gray-300 hover:text-red-400 text-lg leading-none px-2"
-                    title="Quitar de la agenda de hoy"
+                    className="text-xs text-gray-400 active:text-red-400 px-2 py-1.5 font-medium"
                   >
-                    ✕
+                    ✕ Quitar de hoy
                   </button>
-                </div>
-                <div className="flex justify-end mt-1.5">
                   <button
                     onClick={(e) => { e.stopPropagation(); setModalSaltar(cliente.id); }}
                     className="px-3 py-2 text-sm bg-gray-100 text-gray-600 rounded-xl font-medium active:bg-gray-200"

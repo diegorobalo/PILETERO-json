@@ -12,7 +12,7 @@ export default function WaterMeasurement({ cloro, ph, onChange }) {
 
   return (
     <div className="mb-6">
-      <h2 className="text-lg font-bold text-gray-900 mb-4">Mediciones del Agua</h2>
+      <h2 className="section-heading text-lg font-bold text-gray-900">Mediciones del Agua</h2>
 
       <div className="space-y-4">
         {/* Cloro Input */}

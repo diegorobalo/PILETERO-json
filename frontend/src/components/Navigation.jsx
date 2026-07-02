@@ -66,25 +66,23 @@ function Navigation() {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white shadow-[0_-2px_12px_rgba(0,0,0,0.08)] flex">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-100 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] flex">
       {TABS.map(([path, icon, label]) => {
         const active = location.pathname === path || (path === '/' && location.pathname === '/agenda');
         return (
           <button key={path} onClick={() => navigate(path)}
-            className={`flex-1 flex flex-col items-center pt-1.5 pb-3 relative transition-colors ${
-              active ? 'text-sky-600' : 'text-gray-400'
+            className="flex-1 flex flex-col items-center pt-2 pb-3 transition-colors">
+            <span className={`text-2xl leading-tight px-3 py-1 rounded-xl transition-colors ${
+              active ? 'bg-sky-100' : ''
             }`}>
-            {active && (
-              <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-sky-500 rounded-full" />
-            )}
-            <span className="text-2xl leading-tight">{icon}</span>
-            <span className={`text-[10px] font-semibold mt-0.5 ${active ? 'text-sky-600' : 'text-gray-400'}`}>
+              {icon}
+            </span>
+            <span className={`text-[10px] mt-0.5 ${active ? 'font-bold text-sky-600' : 'font-semibold text-gray-400'}`}>
               {label}
             </span>
           </button>
         );
       })}
-      <span className={`absolute top-2 right-3 w-2 h-2 rounded-full ${isOnline ? 'bg-green-400' : 'bg-amber-400'}`} />
     </nav>
   );
 }

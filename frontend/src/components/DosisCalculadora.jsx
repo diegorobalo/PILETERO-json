@@ -125,7 +125,7 @@ export default function DosisCalculadora({ volumenLitros, cloroActual, phActual,
 
   return (
     <div className="mb-6">
-      <h2 className="text-lg font-bold text-gray-900 mb-1">🧪 Dosis Sugeridas</h2>
+      <h2 className="section-heading text-lg font-bold text-gray-900">🧪 Dosis Sugeridas</h2>
       <p className="text-xs text-gray-400 mb-4">Solo como referencia — para descontar stock, agregá los insumos en "Lo que usaste" abajo.</p>
 
       {/* Condición del agua */}
