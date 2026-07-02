@@ -594,25 +594,47 @@ class DatabaseService {
 
   async getBackupData() {
     const db = getClient();
+
+    async function queryTable(sql, nombre) {
+      try {
+        const r = await db.execute(sql);
+        return { ok: true, rows: rowsToObjs(r.rows) };
+      } catch (e) {
+        console.error(`[backup] Error en tabla ${nombre}:`, e.message);
+        return { ok: false, error: e.message, rows: [] };
+      }
+    }
+
     const [clientes, visitas, pagos, gastos, inventario, movimientos, config] = await Promise.all([
-      db.execute('SELECT * FROM clientes ORDER BY id ASC'),
-      db.execute('SELECT * FROM visitas ORDER BY id ASC'),
-      db.execute('SELECT * FROM pagos ORDER BY id ASC'),
-      db.execute('SELECT * FROM gastos ORDER BY id ASC'),
-      db.execute('SELECT * FROM inventario ORDER BY id ASC'),
-      db.execute('SELECT * FROM movimientos_inventario ORDER BY id ASC'),
-      db.execute('SELECT * FROM configuracion ORDER BY id ASC'),
+      queryTable('SELECT * FROM clientes ORDER BY id ASC', 'clientes'),
+      queryTable('SELECT id, cliente_id, fecha, hora_inicio, hora_fin, tareas_realizadas, cloro_ppm, ph, quimicos_usados, observaciones, created_at FROM visitas ORDER BY id ASC', 'visitas'),
+      queryTable('SELECT * FROM pagos ORDER BY id ASC', 'pagos'),
+      queryTable('SELECT * FROM gastos ORDER BY id ASC', 'gastos'),
+      queryTable('SELECT * FROM inventario ORDER BY id ASC', 'inventario'),
+      queryTable('SELECT * FROM movimientos_inventario ORDER BY id ASC', 'movimientos_inventario'),
+      queryTable('SELECT * FROM configuracion ORDER BY id ASC', 'configuracion'),
     ]);
+
+    const errores = [];
+    if (!clientes.ok) errores.push(`clientes: ${clientes.error}`);
+    if (!visitas.ok) errores.push(`visitas: ${visitas.error}`);
+    if (!pagos.ok) errores.push(`pagos: ${pagos.error}`);
+    if (!gastos.ok) errores.push(`gastos: ${gastos.error}`);
+    if (!inventario.ok) errores.push(`inventario: ${inventario.error}`);
+    if (!movimientos.ok) errores.push(`movimientos_inventario: ${movimientos.error}`);
+    if (!config.ok) errores.push(`configuracion: ${config.error}`);
+
     return {
       version: '1.0',
       generado_en: new Date().toISOString(),
-      clientes: rowsToObjs(clientes.rows),
-      visitas: rowsToObjs(visitas.rows),
-      pagos: rowsToObjs(pagos.rows),
-      gastos: rowsToObjs(gastos.rows),
-      inventario: rowsToObjs(inventario.rows),
-      movimientos_inventario: rowsToObjs(movimientos.rows),
-      configuracion: rowsToObjs(config.rows),
+      advertencias: errores.length > 0 ? errores : undefined,
+      clientes: clientes.rows,
+      visitas: visitas.rows,
+      pagos: pagos.rows,
+      gastos: gastos.rows,
+      inventario: inventario.rows,
+      movimientos_inventario: movimientos.rows,
+      configuracion: config.rows,
     };
   }
 

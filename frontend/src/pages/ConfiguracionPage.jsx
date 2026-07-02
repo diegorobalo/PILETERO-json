@@ -36,8 +36,21 @@ export default function ConfiguracionPage() {
     try {
       setDescargandoBackup(true)
       const response = await fetch('/api/backup')
-      if (!response.ok) throw new Error('Error del servidor')
-      const blob = await response.blob()
+
+      let data
+      const text = await response.text()
+      try {
+        data = JSON.parse(text)
+      } catch {
+        throw new Error(`Respuesta inválida del servidor: ${text.slice(0, 200)}`)
+      }
+
+      if (!response.ok) {
+        throw new Error(data?.error || `Error ${response.status}`)
+      }
+
+      const json = JSON.stringify(data, null, 2)
+      const blob = new Blob([json], { type: 'application/json' })
       const fecha = new Date().toISOString().slice(0, 10)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -47,9 +60,14 @@ export default function ConfiguracionPage() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      toastSuccess('Backup descargado correctamente')
-    } catch {
-      toastError('Error al descargar el backup')
+
+      if (data.advertencias?.length) {
+        toastError(`Backup parcial — tablas con error: ${data.advertencias.join(', ')}`)
+      } else {
+        toastSuccess('Backup descargado correctamente')
+      }
+    } catch (e) {
+      toastError(`Error al descargar el backup: ${e.message}`)
     } finally {
       setDescargandoBackup(false)
     }
