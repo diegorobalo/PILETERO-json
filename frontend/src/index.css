@@ -44,3 +44,9 @@ code {
   border-radius: 99px;
   flex-shrink: 0;
 }
+
+@media print {
+  nav { display: none !important; }
+  .ml-64 { margin-left: 0 !important; }
+  button { display: none !important; }
+}
