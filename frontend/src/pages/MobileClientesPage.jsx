@@ -178,11 +178,22 @@ export default function MobileClientesPage() {
         {!loading && clientesFiltrados.length > 0 && (
           <div className="space-y-3">
             {clientesFiltrados.map((cliente) => (
-              <div key={cliente.id} className="bg-white rounded-xl shadow-sm border-l-4 border-l-sky-400 px-4 py-4">
+              <div key={cliente.id} className={`bg-white rounded-xl shadow-sm border-l-4 px-4 py-4 ${
+                  cliente.estado === 'suspendido' ? 'border-l-amber-400 bg-amber-50/40' : 'border-l-sky-400'
+                }`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-bold text-gray-900 truncate">{cliente.nombre}</p>
+                      {cliente.estado === 'suspendido' ? (
+                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full whitespace-nowrap font-semibold">
+                          ⏸ Suspendido
+                        </span>
+                      ) : (
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full whitespace-nowrap font-semibold">
+                          Activo
+                        </span>
+                      )}
                       {cliente.pendiente_sync && (
                         <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full whitespace-nowrap">
                           ⏳ sync pendiente
