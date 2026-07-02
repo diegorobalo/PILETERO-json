@@ -280,13 +280,11 @@ export default function AgendaPage() {
 
   function abrirRutaMaps() {
     const pendientes = clientesDeHoy.filter(c => getClienteStatus(c.id) !== 'completado' && c.direccion);
-    const completados = clientesDeHoy.filter(c => getClienteStatus(c.id) === 'completado' && c.direccion);
-    const enOrden = [...pendientes, ...completados];
-    if (enOrden.length === 0) {
-      toastInfo('Ningún cliente de hoy tiene dirección registrada');
+    if (pendientes.length === 0) {
+      toastInfo('¡Todas las visitas de hoy están completadas! 🎉');
       return;
     }
-    const url = `https://www.google.com/maps/dir/${enOrden.map(c => encodeURIComponent(c.direccion)).join('/')}`;
+    const url = `https://www.google.com/maps/dir/${pendientes.map(c => encodeURIComponent(c.direccion)).join('/')}`;
     window.open(url, '_blank');
   }
 
@@ -408,14 +406,17 @@ export default function AgendaPage() {
         )}
 
         {/* Botón hoja de ruta */}
-        {clientesDeHoy.some(c => c.direccion) && (
-          <button
-            onClick={abrirRutaMaps}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-sky-600 text-white rounded-xl font-semibold text-sm mb-4 active:bg-sky-700 shadow-sm"
-          >
-            🗺️ Ver ruta en Maps · {clientesDeHoy.filter(c => c.direccion).length} paradas
-          </button>
-        )}
+        {(() => {
+          const paradasPendientes = clientesDeHoy.filter(c => getClienteStatus(c.id) !== 'completado' && c.direccion).length;
+          return paradasPendientes > 0 ? (
+            <button
+              onClick={abrirRutaMaps}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-sky-600 text-white rounded-xl font-semibold text-sm mb-4 active:bg-sky-700 shadow-sm"
+            >
+              🗺️ Ver ruta en Maps · {paradasPendientes} {paradasPendientes === 1 ? 'parada' : 'paradas'}
+            </button>
+          ) : null;
+        })()}
 
         {/* Lista de clientes */}
         {clientesDeHoy.length === 0 ? (
