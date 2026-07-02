@@ -73,7 +73,7 @@ export default function SelectorInsumo({ onAgregarInsumo }) {
           <option value="">-- Seleccioná insumo --</option>
           {insumos.map(i => (
             <option key={i.id} value={i.id}>
-              {i.nombre} ({i.stock} {i.unidad || 'g'} disponible)
+              {i.nombre} ({i.stock_actual} {i.unidad || 'g'} disponible)
             </option>
           ))}
         </select>

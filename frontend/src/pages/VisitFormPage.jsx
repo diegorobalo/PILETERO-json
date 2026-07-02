@@ -4,6 +4,7 @@ import TaskChecklist from '../components/TaskChecklist';
 import WaterMeasurement from '../components/WaterMeasurement';
 import PhotoUpload from '../components/PhotoUpload';
 import DosisCalculadora from '../components/DosisCalculadora';
+import SelectorInsumo from '../components/SelectorInsumo';
 import storageService from '../services/storage';
 import { apiClient } from '../services/api';
 import { toastError, toastWarn } from '../utils/toast';
@@ -19,7 +20,7 @@ export default function VisitFormPage() {
   const [tasks, setTasks] = useState(draft.tasks || []);
   const [cloro, setCloro] = useState(draft.cloro ?? '');
   const [ph, setPh] = useState(draft.ph ?? '');
-  const [quimicosUsados, setQuimicosUsados] = useState(draft.quimicosUsados || {});
+  const [quimicosUsados, setQuimicosUsados] = useState(draft.quimicosUsados || []);
   const [observaciones, setObservaciones] = useState(draft.observaciones || '');
   const [fotos, setFotos] = useState(draft.fotos || []);
   const [saving, setSaving] = useState(false);
@@ -72,6 +73,26 @@ export default function VisitFormPage() {
   function handleMeasurementChange(key, value) {
     if (key === 'cloro') setCloro(value);
     else if (key === 'ph') setPh(value);
+  }
+
+  function handleDosisChange({ usados }) {
+    setQuimicosUsados(usados || []);
+  }
+
+  function handleAgregarInsumo(insumo) {
+    setQuimicosUsados(prev => {
+      const idx = prev.findIndex(q => q.insumo_id === insumo.insumo_id);
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], cantidad: parseFloat(updated[idx].cantidad) + parseFloat(insumo.cantidad) };
+        return updated;
+      }
+      return [...prev, insumo];
+    });
+  }
+
+  function handleEliminarInsumo(idx) {
+    setQuimicosUsados(prev => prev.filter((_, i) => i !== idx));
   }
 
   function handleAddFoto(foto) {
@@ -181,8 +202,39 @@ export default function VisitFormPage() {
           volumenLitros={cliente.volumen_litros}
           cloroActual={cloro}
           phActual={ph}
-          onChange={setQuimicosUsados}
+          onChange={handleDosisChange}
         />
+
+        {/* Lo que usaste */}
+        <div className="mb-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-3">Lo que usaste</h2>
+          {quimicosUsados.length > 0 ? (
+            <div className="space-y-2 mb-3">
+              {quimicosUsados.map((insumo, idx) => (
+                <div key={insumo.insumo_id} className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2">
+                  <span className="flex-1 text-sm font-medium text-gray-800">{insumo.nombre}</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={insumo.cantidad}
+                    onChange={e => {
+                      const updated = [...quimicosUsados];
+                      updated[idx] = { ...updated[idx], cantidad: parseFloat(e.target.value) || 0 };
+                      setQuimicosUsados(updated);
+                    }}
+                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                  />
+                  <span className="text-xs text-gray-500 w-8">{insumo.unidad}</span>
+                  <button onClick={() => handleEliminarInsumo(idx)} className="text-red-400 active:text-red-600 text-lg leading-none px-1">✕</button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 mb-3">Sin insumos agregados aún</p>
+          )}
+          <SelectorInsumo onAgregarInsumo={handleAgregarInsumo} />
+        </div>
+
         <PhotoUpload fotos={fotos} onAddFoto={handleAddFoto} onRemoveFoto={handleRemoveFoto} />
 
         <div className="mb-6">
