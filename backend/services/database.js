@@ -612,7 +612,7 @@ class DatabaseService {
       queryTable('SELECT * FROM gastos ORDER BY id ASC', 'gastos'),
       queryTable('SELECT * FROM inventario ORDER BY id ASC', 'inventario'),
       queryTable('SELECT * FROM movimientos_inventario ORDER BY id ASC', 'movimientos_inventario'),
-      queryTable('SELECT * FROM configuracion ORDER BY id ASC', 'configuracion'),
+      queryTable('SELECT * FROM configuracion ORDER BY clave ASC', 'configuracion'),
     ]);
 
     const errores = [];
