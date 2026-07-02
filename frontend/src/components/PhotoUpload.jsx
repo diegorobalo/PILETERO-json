@@ -15,13 +15,6 @@ function compressImage(file) {
       return;
     }
 
-    // Validate file size (max 3MB raw)
-    const MAX_RAW_SIZE = 3 * 1024 * 1024; // 3MB
-    if (file.size > MAX_RAW_SIZE) {
-      console.error(`File too large: ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds ${MAX_RAW_SIZE / 1024 / 1024}MB`);
-      resolve(null);
-      return;
-    }
 
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -71,16 +64,14 @@ export default function PhotoUpload({ fotos, onAddFoto, onRemoveFoto }) {
       if (!file) return;
       event.target.value = '';
 
-      // Validate file type upfront
       if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-        console.error('Invalid file type:', file.type);
-        alert('❌ Invalid file type. Only JPEG, PNG, and WebP are allowed.');
+        alert('❌ Formato no válido. Solo se aceptan fotos JPEG, PNG o WebP.');
         return;
       }
 
       const data = await compressImage(file);
       if (!data) {
-        alert('❌ Failed to process image. File may be too large or corrupted.\n\nMax size: 3MB before compression.');
+        alert('❌ No se pudo procesar la foto. Intentá con otra imagen.');
         return;
       }
 
