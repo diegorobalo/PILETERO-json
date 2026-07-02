@@ -61,6 +61,7 @@ function Navigation() {
   const TABS = [
     ['/',           '📅', 'Agenda'],
     ['/clientes',   '👥', 'Clientes'],
+    ['/historial',  '📋', 'Historial'],
     ['/finance',    '💰', 'Finanzas'],
     ['/inventario', '📦', 'Stock'],
   ];

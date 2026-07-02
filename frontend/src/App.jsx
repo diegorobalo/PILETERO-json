@@ -8,6 +8,7 @@ import AgendaPage from './pages/AgendaPage'
 import VisitFormPage from './pages/VisitFormPage'
 import MobileClientesPage from './pages/MobileClientesPage'
 import MobileInventarioPage from './pages/MobileInventarioPage'
+import MobileVisitasPage from './pages/MobileVisitasPage'
 
 // Desktop Pages
 import DashboardPage from './pages/DashboardPage'
@@ -46,6 +47,7 @@ function App() {
               <Route path="/agenda" element={<AgendaPage />} />
               <Route path="/clientes" element={<MobileClientesPage />} />
               <Route path="/inventario" element={<MobileInventarioPage />} />
+              <Route path="/historial" element={<MobileVisitasPage />} />
               <Route path="/finance" element={<FinancePage />} />
               <Route path="/reporte" element={<ReporteVisitaPage />} />
               <Route path="/recibo" element={<ReciboPagoPage />} />
