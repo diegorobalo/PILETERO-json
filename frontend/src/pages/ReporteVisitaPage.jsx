@@ -70,6 +70,14 @@ export default function ReporteVisitaPage() {
     apiClient.getConfiguracion().then(c => { if (c.nombre_tecnico) setTecnico(t => ({ ...t, ...c })) }).catch(() => {})
   }, [])
 
+  // Subir fotos al servidor en background cuando vienen del cel (para que PC las pueda ver)
+  useEffect(() => {
+    if (!fotosState?.length || !visita?.id) return
+    fotosState.forEach(foto => {
+      apiClient.uploadFotoVisita(visita.id, foto.type || 'extra', foto.data).catch(() => {})
+    })
+  }, [])
+
   useEffect(() => {
     if (!visita || fotos.length > 0 || !visita.id) return
     setLoadingFotos(true)

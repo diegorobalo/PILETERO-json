@@ -327,6 +327,17 @@ router.get('/visitas/:id/fotos', async (req, res) => {
   }
 });
 
+router.post('/visitas/:id/fotos', async (req, res) => {
+  try {
+    const { tipo, data } = req.body;
+    if (!data) return res.status(400).json({ error: 'data requerido' });
+    const foto = await databaseService.saveFoto({ visita_id: req.params.id, tipo, data });
+    res.status(201).json(foto);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to save photo' });
+  }
+});
+
 /**
  * GET /api/clientes/:id/fotos-cliente
  */

@@ -198,6 +198,10 @@ const apiClient = {
     return axiosInstance.get(`/visitas/${visitaId}/fotos`).then((r) => r.data);
   },
 
+  uploadFotoVisita(visitaId, tipo, data) {
+    return axiosInstance.post(`/visitas/${visitaId}/fotos`, { tipo, data }).then((r) => r.data);
+  },
+
   // ============== PAGOS ENDPOINTS ==============
 
   getPagos() {
