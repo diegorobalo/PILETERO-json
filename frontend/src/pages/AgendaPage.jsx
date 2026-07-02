@@ -92,6 +92,7 @@ export default function AgendaPage() {
   const [vistaMode, setVistaMode] = useState('hoy'); // 'hoy' | 'semana'
   const [config, setConfigLocal] = useState({}); // WhatsApp config
   const [menuWA, setMenuWA] = useState(null); // clienteId con menú WA abierto
+  const [modalRuta, setModalRuta] = useState(null); // array de clientes para la ruta
 
   async function cargarDatos() {
     let apiOk = false;
@@ -284,8 +285,14 @@ export default function AgendaPage() {
       toastInfo('¡Todas las visitas de hoy están completadas! 🎉');
       return;
     }
-    const url = `https://www.google.com/maps/dir/${pendientes.map(c => encodeURIComponent(c.direccion)).join('/')}`;
+    setModalRuta(pendientes);
+  }
+
+  function confirmarRuta() {
+    if (!modalRuta) return;
+    const url = `https://www.google.com/maps/dir/${modalRuta.map(c => encodeURIComponent(c.direccion)).join('/')}`;
     window.open(url, '_blank');
+    setModalRuta(null);
   }
 
   useEffect(() => {
@@ -558,6 +565,40 @@ export default function AgendaPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Modal hoja de ruta */}
+      {modalRuta && (
+        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setModalRuta(null)}>
+          <div className="bg-white rounded-t-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 pt-5 pb-3">
+              <h2 className="text-lg font-bold text-gray-900">🗺️ Ruta de hoy</h2>
+              <button onClick={() => setModalRuta(null)} className="text-gray-400 text-xl font-bold w-8 h-8 flex items-center justify-center">✕</button>
+            </div>
+            <p className="text-xs text-gray-400 px-6 pb-3">Las letras corresponden a las paradas en Google Maps</p>
+            <div className="space-y-2 px-6 pb-4 max-h-72 overflow-y-auto">
+              {modalRuta.map((cliente, i) => (
+                <div key={cliente.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3">
+                  <span className="w-7 h-7 rounded-full bg-sky-600 text-white text-xs font-black flex items-center justify-center flex-shrink-0">
+                    {String.fromCharCode(65 + i)}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 truncate">{cliente.nombre}</p>
+                    <p className="text-xs text-gray-400 truncate">{cliente.direccion}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="px-6 pb-6">
+              <button
+                onClick={confirmarRuta}
+                className="w-full py-4 bg-sky-600 text-white font-bold rounded-xl text-base active:bg-sky-700"
+              >
+                Abrir en Google Maps →
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
