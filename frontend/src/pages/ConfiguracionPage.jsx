@@ -35,8 +35,7 @@ export default function ConfiguracionPage() {
   async function descargarBackup() {
     try {
       setDescargandoBackup(true)
-      const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
-      const response = await fetch(`${BASE_URL}/backup`)
+      const response = await fetch('/api/backup')
       if (!response.ok) throw new Error('Error del servidor')
       const blob = await response.blob()
       const fecha = new Date().toISOString().slice(0, 10)
