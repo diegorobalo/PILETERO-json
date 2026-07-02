@@ -278,6 +278,18 @@ export default function AgendaPage() {
     return visitas.filter((v) => v.hora_fin).length;
   }
 
+  function abrirRutaMaps() {
+    const pendientes = clientesDeHoy.filter(c => getClienteStatus(c.id) !== 'completado' && c.direccion);
+    const completados = clientesDeHoy.filter(c => getClienteStatus(c.id) === 'completado' && c.direccion);
+    const enOrden = [...pendientes, ...completados];
+    if (enOrden.length === 0) {
+      toastInfo('Ningún cliente de hoy tiene dirección registrada');
+      return;
+    }
+    const url = `https://www.google.com/maps/dir/${enOrden.map(c => encodeURIComponent(c.direccion)).join('/')}`;
+    window.open(url, '_blank');
+  }
+
   useEffect(() => {
     cargarDatos();
     const goOffline = () => setSyncStatus('offline');
@@ -393,6 +405,16 @@ export default function AgendaPage() {
               Cancelar
             </button>
           </div>
+        )}
+
+        {/* Botón hoja de ruta */}
+        {clientesDeHoy.some(c => c.direccion) && (
+          <button
+            onClick={abrirRutaMaps}
+            className="w-full flex items-center justify-center gap-2 py-3 bg-sky-600 text-white rounded-xl font-semibold text-sm mb-4 active:bg-sky-700 shadow-sm"
+          >
+            🗺️ Ver ruta en Maps · {clientesDeHoy.filter(c => c.direccion).length} paradas
+          </button>
         )}
 
         {/* Lista de clientes */}
