@@ -9,8 +9,8 @@ export default function ClientsPage() {
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [panelCliente, setPanelCliente] = useState(null) // { cliente, visitas }
-  const [panelTab, setPanelTab] = useState('visitas') // 'visitas' | 'agua'
+  const [panelCliente, setPanelCliente] = useState(null) // { cliente, visitas, pagos }
+  const [panelTab, setPanelTab] = useState('visitas') // 'visitas' | 'agua' | 'pagos'
   const [loadingPanel, setLoadingPanel] = useState(false)
 
   useEffect(() => {
@@ -71,8 +71,11 @@ export default function ClientsPage() {
     setLoadingPanel(true)
     setPanelTab('visitas')
     try {
-      const visitas = await apiClient.getVisitasByCliente(cliente.id)
-      setPanelCliente({ cliente, visitas })
+      const [visitas, pagos] = await Promise.all([
+        apiClient.getVisitasByCliente(cliente.id),
+        apiClient.getPagosByCliente(cliente.id),
+      ])
+      setPanelCliente({ cliente, visitas, pagos: pagos || [] })
     } catch {
       alert('No se pudo cargar el historial')
     } finally {
@@ -136,6 +139,7 @@ export default function ClientsPage() {
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Dirección</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Teléfono</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Volumen</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Estado</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Acciones</th>
                 </tr>
               </thead>
@@ -147,6 +151,16 @@ export default function ClientsPage() {
                     <td className="px-6 py-4 text-gray-600">{cliente.telefono || '-'}</td>
                     <td className="px-6 py-4 text-gray-900">
                       {cliente.volumen_litros ? `${cliente.volumen_litros}L` : '-'}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${
+                        cliente.estado === 'suspendido' ? 'bg-amber-100 text-amber-700' :
+                        cliente.estado === 'eliminado' ? 'bg-red-100 text-red-700' :
+                        'bg-green-100 text-green-700'
+                      }`}>
+                        {cliente.estado === 'suspendido' ? 'Suspendido' :
+                         cliente.estado === 'eliminado' ? 'Eliminado' : 'Activo'}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
                       <button
@@ -194,7 +208,7 @@ export default function ClientsPage() {
             </div>
 
             <div className="flex border-b border-gray-100">
-              {[['visitas', 'Visitas'], ['agua', 'Agua']].map(([id, label]) => (
+              {[['visitas', 'Visitas'], ['agua', 'Agua'], ['pagos', 'Pagos']].map(([id, label]) => (
                 <button key={id} onClick={() => setPanelTab(id)}
                   className={`flex-1 py-3 text-sm font-semibold transition-colors ${panelTab === id ? 'text-sky-700 border-b-2 border-sky-600' : 'text-gray-500'}`}>
                   {label}
@@ -221,6 +235,29 @@ export default function ClientsPage() {
                       {v.observaciones && <p className="text-sm text-gray-600">{v.observaciones}</p>}
                     </div>
                   ))}
+                </div>
+              )}
+
+              {panelTab === 'pagos' && (
+                <div className="space-y-3">
+                  {panelCliente.pagos.length === 0 ? (
+                    <p className="text-gray-400">Sin pagos registrados.</p>
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-500 mb-1">Total: <strong>${panelCliente.pagos.reduce((s, p) => s + (p.monto || 0), 0).toLocaleString('es-AR')}</strong> en {panelCliente.pagos.length} pago(s)</p>
+                      {panelCliente.pagos.map(p => (
+                        <div key={p.id} className="border border-gray-100 rounded-xl p-4 flex items-center justify-between">
+                          <div>
+                            <p className="font-bold text-gray-800 text-sm">
+                              {new Date(p.fecha + 'T00:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </p>
+                            <p className="text-xs text-gray-500">{p.metodo_pago || 'efectivo'}{p.mes ? ` · ${p.mes}` : ''}</p>
+                          </div>
+                          <p className="font-black text-green-700">${(p.monto || 0).toLocaleString('es-AR')}</p>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
 

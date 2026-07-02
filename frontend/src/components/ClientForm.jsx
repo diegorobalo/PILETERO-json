@@ -88,7 +88,7 @@ export default function ClientForm({ initialData, onSubmit, onCancel }) {
       const { dias_visita, tipo_construccion, ...rest } = initialData
 
       // Detect if tipo_construccion is a custom value (not one of the predefined options)
-      const OPCIONES_PREDEFINIDAS = ['fibra', 'material', 'pintada']
+      const OPCIONES_PREDEFINIDAS = ['fibra_vidrio', 'pintada', 'venecita', 'marmolina']
       const isCustom = tipo_construccion && !OPCIONES_PREDEFINIDAS.includes(tipo_construccion)
 
       setFormData({
@@ -326,10 +326,11 @@ export default function ClientForm({ initialData, onSubmit, onCancel }) {
           <select name="tipo_construccion" value={formData.tipo_construccion} onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">Seleccionar...</option>
-            <option value="fibra">Pileta de obra</option>
-            <option value="material">Pileta estructurada</option>
-            <option value="pintada">Pileta inflable</option>
-            <option value="otro">Otros</option>
+            <option value="fibra_vidrio">Piscina Fibra de Vidrio</option>
+            <option value="pintada">Piscina Pintada</option>
+            <option value="venecita">Piscina Venecita</option>
+            <option value="marmolina">Piscina Marmolina / Revestimiento Cementicio</option>
+            <option value="otro">Otros Tipos Piscinas</option>
           </select>
 
           {/* Custom construction input - only show when "Otros" is selected */}

@@ -31,6 +31,7 @@ export default function FinancePage() {
   const [mes, setMes] = useState(getMesActual())
   const [modalCliente, setModalCliente] = useState(null)
   const [formPago, setFormPago] = useState({ monto: '', fecha: new Date().toISOString().split('T')[0], metodo_pago: 'efectivo', mes: '', tipo_abono: '' })
+  const [extrasAbono, setExtrasAbono] = useState([])
   const [guardando, setGuardando] = useState(false)
   const [showAumento, setShowAumento] = useState(false)
   const [pctAumento, setPctAumento] = useState('10')
@@ -67,16 +68,20 @@ export default function FinancePage() {
       mes: '',
       tipo_abono: '',
     })
+    setExtrasAbono([])
   }
 
   async function registrarPago() {
-    const monto = parseFloat(formPago.monto)
-    if (!monto || monto <= 0) return toastError('Ingresá un monto válido')
+    const abonoMonto = parseFloat(formPago.monto)
+    if (!abonoMonto || abonoMonto <= 0) return toastError('Ingresá un monto válido')
+    const extrasValidos = extrasAbono.filter(e => e.descripcion.trim() && parseFloat(e.monto) > 0)
+    const extrasTotal = extrasValidos.reduce((s, e) => s + parseFloat(e.monto), 0)
+    const montoTotal = abonoMonto + extrasTotal
     setGuardando(true)
     try {
       const pago = await apiClient.createPago({
         cliente_id: modalCliente.id,
-        monto,
+        monto: montoTotal,
         fecha: formPago.fecha,
         metodo_pago: formPago.metodo_pago,
         estado: 'pagado',
@@ -87,17 +92,22 @@ export default function FinancePage() {
       setModalCliente(null)
       navigate('/recibo', {
         state: {
-          pago: { ...pago, cliente_nombre: modalCliente.nombre, cliente_direccion: modalCliente.direccion },
+          pago: {
+            ...pago,
+            cliente_nombre: modalCliente.nombre,
+            cliente_direccion: modalCliente.direccion,
+            abonoMonto,
+            extras: extrasValidos,
+          },
           cliente: modalCliente,
         },
       })
     } catch (e) {
       if (e.sinConexion) {
-        // Guardar en cola offline
         const q = JSON.parse(localStorage.getItem('piletero_q_pagos') || '[]')
         q.push({
           cliente_id: modalCliente.id,
-          monto,
+          monto: montoTotal,
           fecha: formPago.fecha,
           metodo_pago: formPago.metodo_pago,
           estado: 'pagado',
@@ -107,7 +117,7 @@ export default function FinancePage() {
         })
         localStorage.setItem('piletero_q_pagos', JSON.stringify(q))
         setModalCliente(null)
-        toastOffline(`Pago de $${monto} guardado offline\nSe registrará cuando vuelvas a conectar`)
+        toastOffline(`Pago de $${montoTotal} guardado offline\nSe registrará cuando vuelvas a conectar`)
       } else {
         toastError('Error: ' + (e.response?.data?.error || e.message))
       }
@@ -174,7 +184,10 @@ export default function FinancePage() {
   const clientesConStatus = clientesActivos.map(c => {
     const pagosMes = pagos.filter(p => p.cliente_id === c.id && p.fecha?.startsWith(mes))
     const totalPagado = pagosMes.reduce((s, p) => s + (p.monto || 0), 0)
-    const esperado = c.precio_abono || 0
+    // Para meses anteriores, si el cliente ya pagó algo ese mes, no mostrar deuda
+    // (evita negativos cuando hubo un aumento de precios posterior)
+    const esMesActual = mes === getMesActual()
+    const esperado = (!esMesActual && totalPagado > 0) ? totalPagado : (c.precio_abono || 0)
     const deuda = Math.max(0, esperado - totalPagado)
     return { ...c, pagosMes, totalPagado, esperado, deuda, pagado: esperado > 0 && deuda === 0, parcial: totalPagado > 0 && deuda > 0 }
   })
@@ -537,6 +550,57 @@ export default function FinancePage() {
                   <option value="Eventual">Eventual</option>
                   <option value="Otro">Otro</option>
                 </select>
+              </div>
+
+              {/* Extras */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">Extras (opcional)</label>
+                  <button type="button"
+                    onClick={() => setExtrasAbono(prev => [...prev, { descripcion: '', monto: '' }])}
+                    className="text-xs text-blue-600 font-semibold hover:underline">
+                    + Agregar extra
+                  </button>
+                </div>
+                {extrasAbono.map((ex, i) => (
+                  <div key={i} className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      placeholder="Descripción (ej: Boya pastillas)"
+                      value={ex.descripcion}
+                      onChange={e => setExtrasAbono(prev => prev.map((x, j) => j === i ? { ...x, descripcion: e.target.value } : x))}
+                      className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm"
+                    />
+                    <input
+                      type="number"
+                      placeholder="$"
+                      value={ex.monto}
+                      onChange={e => setExtrasAbono(prev => prev.map((x, j) => j === i ? { ...x, monto: e.target.value } : x))}
+                      className="w-24 border border-gray-300 rounded px-2 py-1.5 text-sm"
+                    />
+                    <button type="button"
+                      onClick={() => setExtrasAbono(prev => prev.filter((_, j) => j !== i))}
+                      className="text-red-400 hover:text-red-600 px-1 text-lg leading-none">✕</button>
+                  </div>
+                ))}
+                {extrasAbono.filter(e => e.descripcion.trim() && parseFloat(e.monto) > 0).length > 0 && (
+                  <div className="mt-2 p-3 bg-sky-50 rounded-lg text-sm space-y-1">
+                    <div className="flex justify-between text-gray-600">
+                      <span>Abono:</span>
+                      <span>${parseFloat(formPago.monto || 0).toLocaleString('es-AR')}</span>
+                    </div>
+                    {extrasAbono.filter(e => e.descripcion.trim() && parseFloat(e.monto) > 0).map((e, i) => (
+                      <div key={i} className="flex justify-between text-gray-600">
+                        <span>{e.descripcion}:</span>
+                        <span>${parseFloat(e.monto).toLocaleString('es-AR')}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between font-bold text-gray-900 border-t border-sky-200 pt-1 mt-1">
+                      <span>Total:</span>
+                      <span>${(parseFloat(formPago.monto || 0) + extrasAbono.filter(e => e.descripcion.trim() && parseFloat(e.monto) > 0).reduce((s, e) => s + parseFloat(e.monto), 0)).toLocaleString('es-AR')}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex gap-3 mt-6">

@@ -22,6 +22,12 @@ function capitalize(str) {
 
 function buildWhatsAppText(pago, cliente, tecnico) {
   const mesText = pago.mes ? capitalize(pago.mes) : capitalize(formatMes(pago.fecha));
+  const tieneExtras = pago.extras && pago.extras.length > 0;
+  const montoLines = tieneExtras
+    ? `• Abono: $${(pago.abonoMonto || 0).toLocaleString('es-AR')}\n` +
+      pago.extras.map(e => `• ${e.descripcion}: $${parseFloat(e.monto).toLocaleString('es-AR')}`).join('\n') +
+      `\n• *Total: $${(pago.monto || 0).toLocaleString('es-AR')}*`
+    : `• Monto: $${(pago.monto || 0).toLocaleString('es-AR')}`;
   return `🏊 *RECIBO DE PAGO - PILETERO*
 ================
 *Cliente:* ${pago.cliente_nombre || cliente?.nombre || ''}
@@ -29,7 +35,7 @@ function buildWhatsAppText(pago, cliente, tecnico) {
 *Fecha:* ${formatFechaLarga(pago.fecha)}
 
 💰 *PAGO RECIBIDO*
-• Monto: $${(pago.monto || 0).toLocaleString('es-AR')}
+${montoLines}
 • Método: ${capitalize(pago.metodo_pago || 'efectivo')}
 • Concepto: Abono mantenimiento de piscina — ${mesText}
 
@@ -151,10 +157,35 @@ export default function ReciboPagoPage() {
         </div>
 
         {/* Monto — protagonista */}
-        <div className="bg-green-50 border-2 border-green-300 rounded-xl p-6 mb-6 text-center">
-          <p className="text-sm text-green-600 uppercase tracking-wide font-bold mb-2">Total pagado</p>
-          <p className="text-5xl font-black text-green-700">${(pago.monto || 0).toLocaleString('es-AR')}</p>
-          <p className="text-gray-500 mt-2">{capitalize(pago.metodo_pago || 'efectivo')}</p>
+        <div className="bg-green-50 border-2 border-green-300 rounded-xl p-6 mb-6">
+          {pago.extras && pago.extras.length > 0 ? (
+            <>
+              <p className="text-sm text-green-600 uppercase tracking-wide font-bold mb-3 text-center">Detalle del pago</p>
+              <div className="space-y-1 mb-3 text-sm text-gray-700">
+                <div className="flex justify-between">
+                  <span>Abono mantenimiento:</span>
+                  <span className="font-semibold">${(pago.abonoMonto || 0).toLocaleString('es-AR')}</span>
+                </div>
+                {pago.extras.map((e, i) => (
+                  <div key={i} className="flex justify-between">
+                    <span>{e.descripcion}:</span>
+                    <span className="font-semibold">${parseFloat(e.monto).toLocaleString('es-AR')}</span>
+                  </div>
+                ))}
+                <div className="border-t border-green-300 pt-2 mt-2 flex justify-between font-black text-green-800 text-base">
+                  <span>Total:</span>
+                  <span>${(pago.monto || 0).toLocaleString('es-AR')}</span>
+                </div>
+              </div>
+              <p className="text-center text-gray-500 text-sm">{capitalize(pago.metodo_pago || 'efectivo')}</p>
+            </>
+          ) : (
+            <div className="text-center">
+              <p className="text-sm text-green-600 uppercase tracking-wide font-bold mb-2">Total pagado</p>
+              <p className="text-5xl font-black text-green-700">${(pago.monto || 0).toLocaleString('es-AR')}</p>
+              <p className="text-gray-500 mt-2">{capitalize(pago.metodo_pago || 'efectivo')}</p>
+            </div>
+          )}
         </div>
 
         {/* Sello PAGADO */}
