@@ -592,6 +592,30 @@ class DatabaseService {
 
   // ==================== BACKWARD COMPAT ====================
 
+  async getBackupData() {
+    const db = getClient();
+    const [clientes, visitas, pagos, gastos, inventario, movimientos, config] = await Promise.all([
+      db.execute('SELECT * FROM clientes ORDER BY id ASC'),
+      db.execute('SELECT * FROM visitas ORDER BY id ASC'),
+      db.execute('SELECT * FROM pagos ORDER BY id ASC'),
+      db.execute('SELECT * FROM gastos ORDER BY id ASC'),
+      db.execute('SELECT * FROM inventario ORDER BY id ASC'),
+      db.execute('SELECT * FROM movimientos_inventario ORDER BY id ASC'),
+      db.execute('SELECT * FROM configuracion ORDER BY id ASC'),
+    ]);
+    return {
+      version: '1.0',
+      generado_en: new Date().toISOString(),
+      clientes: rowsToObjs(clientes.rows),
+      visitas: rowsToObjs(visitas.rows),
+      pagos: rowsToObjs(pagos.rows),
+      gastos: rowsToObjs(gastos.rows),
+      inventario: rowsToObjs(inventario.rows),
+      movimientos_inventario: rowsToObjs(movimientos.rows),
+      configuracion: rowsToObjs(config.rows),
+    };
+  }
+
   parseQuimicos(raw) {
     if (!raw) return [];
     try {

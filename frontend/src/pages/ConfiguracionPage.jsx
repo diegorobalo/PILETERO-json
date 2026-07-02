@@ -30,6 +30,31 @@ export default function ConfiguracionPage() {
   const [config, setConfig] = useState({})
   const [loading, setLoading] = useState(true)
   const [guardando, setGuardando] = useState(null)
+  const [descargandoBackup, setDescargandoBackup] = useState(false)
+
+  async function descargarBackup() {
+    try {
+      setDescargandoBackup(true)
+      const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+      const response = await fetch(`${BASE_URL}/backup`)
+      if (!response.ok) throw new Error('Error del servidor')
+      const blob = await response.blob()
+      const fecha = new Date().toISOString().slice(0, 10)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `piletero-backup-${fecha}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      toastSuccess('Backup descargado correctamente')
+    } catch {
+      toastError('Error al descargar el backup')
+    } finally {
+      setDescargandoBackup(false)
+    }
+  }
 
   useEffect(() => {
     apiClient.getConfiguracion()
@@ -130,6 +155,20 @@ export default function ConfiguracionPage() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Copia de Seguridad */}
+          <div className="mt-8 pt-8 border-t border-gray-200">
+            <h2 className="text-lg font-bold text-gray-900 mb-2">💾 Copia de Seguridad</h2>
+            <p className="text-gray-500 text-sm mb-4">
+              Descargá todos tus datos (clientes, visitas, pagos, inventario) en un archivo JSON. Guardalo en un lugar seguro como respaldo.
+            </p>
+            <button
+              onClick={descargarBackup}
+              disabled={descargandoBackup}
+              className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-emerald-700 transition-colors">
+              {descargandoBackup ? 'Descargando...' : '📥 Descargar Backup'}
+            </button>
           </div>
         </div>
       )}

@@ -594,4 +594,18 @@ router.delete('/gastos/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== BACKUP ENDPOINT ====================
+
+router.get('/backup', async (req, res) => {
+  try {
+    const data = await databaseService.getBackupData();
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Disposition', `attachment; filename="piletero-backup-${fecha}.json"`);
+    res.setHeader('Content-Type', 'application/json');
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 export default router;
