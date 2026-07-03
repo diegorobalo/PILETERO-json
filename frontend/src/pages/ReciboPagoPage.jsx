@@ -197,8 +197,12 @@ export default function ReciboPagoPage() {
 
         {/* Footer */}
         <div className="border-t border-gray-200 pt-4 text-center text-xs text-gray-500">
+          {tecnico.notas_pie_recibo && (
+            <p className="font-medium text-gray-600 mb-2 italic">"{tecnico.notas_pie_recibo}"</p>
+          )}
           <p className="font-semibold text-gray-700">{tecnico.nombre_tecnico}</p>
           <p>Mantenimiento de piscinas · {tecnico.telefono}</p>
+          {tecnico.email && <p>{tecnico.email}</p>}
           <p className="text-gray-400 mt-1">Generado por PILETERO · {new Date().toLocaleDateString('es-AR')}</p>
         </div>
       </div>

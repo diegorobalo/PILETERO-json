@@ -5,6 +5,17 @@ import storageService from '../services/storage'
 import ClientForm from '../components/ClientForm'
 import { toastSuccess, toastError, toastOffline } from '../utils/toast'
 
+function parseQuimicos(raw) {
+  if (!raw) return []
+  try { return typeof raw === 'string' ? JSON.parse(raw) : raw }
+  catch { return [] }
+}
+
+function formatFecha(dateStr) {
+  if (!dateStr) return ''
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
 export default function MobileClientesPage() {
   const navigate = useNavigate()
   const [clientes, setClientes] = useState([])
@@ -13,6 +24,22 @@ export default function MobileClientesPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingCliente, setEditingCliente] = useState(null)
   const [busqueda, setBusqueda] = useState('')
+  const [historial, setHistorial] = useState(null) // { cliente, visitas, loading }
+
+  async function verHistorial(cliente) {
+    setHistorial({ cliente, visitas: [], pagos: [], loading: true, tab: 'insumos' })
+    try {
+      const [visitas, pagos] = await Promise.all([
+        apiClient.getVisitasByCliente(cliente.id).catch(() => []),
+        apiClient.getPagosByCliente(cliente.id).catch(() => []),
+      ])
+      const visitasOrd = visitas.sort((a, b) => b.fecha.localeCompare(a.fecha))
+      const pagosOrd = pagos.sort((a, b) => b.anio !== a.anio ? b.anio - a.anio : b.mes - a.mes)
+      setHistorial(h => ({ ...h, visitas: visitasOrd, pagos: pagosOrd, loading: false }))
+    } catch {
+      setHistorial(h => ({ ...h, loading: false, error: 'No se pudo cargar el historial' }))
+    }
+  }
 
   useEffect(() => { loadClientes() }, [])
 
@@ -209,6 +236,10 @@ export default function MobileClientesPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
+                  <button onClick={() => verHistorial(cliente)}
+                    className="flex-1 py-2 bg-emerald-50 text-emerald-700 font-semibold rounded-xl text-sm">
+                    📋 Historial
+                  </button>
                   <button onClick={() => handleEdit(cliente)}
                     className="flex-1 py-2 bg-sky-50 text-sky-700 font-semibold rounded-xl text-sm">
                     Editar
@@ -223,6 +254,97 @@ export default function MobileClientesPage() {
           </div>
         )}
       </div>
+
+      {/* Modal historial */}
+      {historial && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={() => setHistorial(null)}>
+          <div className="bg-white rounded-t-2xl w-full max-w-md max-h-[82vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <div>
+                <h2 className="text-lg font-black text-gray-900">Historial</h2>
+                <p className="text-sm text-gray-500">{historial.cliente.nombre}</p>
+              </div>
+              <button onClick={() => setHistorial(null)} className="text-gray-400 text-2xl leading-none">✕</button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-gray-100 px-5">
+              {[['insumos', '📋 Insumos'], ['pagos', '💰 Pagos']].map(([key, label]) => (
+                <button key={key}
+                  onClick={() => setHistorial(h => ({ ...h, tab: key }))}
+                  className={`py-2 px-4 text-sm font-semibold border-b-2 transition-colors ${
+                    historial.tab === key ? 'border-sky-500 text-sky-600' : 'border-transparent text-gray-400'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-5 py-4">
+              {historial.loading && <p className="text-center text-gray-400 py-8">Cargando...</p>}
+              {historial.error && <p className="text-center text-red-400 py-8">{historial.error}</p>}
+
+              {/* Tab insumos */}
+              {!historial.loading && historial.tab === 'insumos' && (
+                historial.visitas.length === 0
+                  ? <p className="text-center text-gray-400 py-8">Sin visitas registradas</p>
+                  : historial.visitas.map(v => {
+                      const quimicos = parseQuimicos(v.quimicos_usados)
+                      return (
+                        <div key={v.id} className="mb-4 pb-4 border-b border-gray-100 last:border-0">
+                          <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">{formatFecha(v.fecha)}</p>
+                          <div className="flex gap-3 text-xs mb-2">
+                            {v.cloro_ppm != null && <span className="text-blue-600">🔵 Cl {v.cloro_ppm} ppm</span>}
+                            {v.ph != null && <span className="text-green-600">🟢 pH {v.ph}</span>}
+                          </div>
+                          {quimicos.length > 0 ? (
+                            <div className="space-y-1">
+                              {quimicos.map((q, i) => (
+                                <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-1.5">
+                                  <span className="text-sm text-gray-800">{q.nombre || q.name}</span>
+                                  <span className="text-sm font-semibold text-sky-700">
+                                    {q.cantidad_usada ?? q.cantidad ?? ''} {q.unidad || ''}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-gray-300 italic">Sin insumos registrados</p>
+                          )}
+                        </div>
+                      )
+                    })
+              )}
+
+              {/* Tab pagos */}
+              {!historial.loading && historial.tab === 'pagos' && (
+                historial.pagos.length === 0
+                  ? <p className="text-center text-gray-400 py-8">Sin pagos registrados</p>
+                  : (() => {
+                      const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+                      return historial.pagos.map(p => (
+                        <div key={p.id} className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
+                          <div>
+                            <p className="font-semibold text-gray-900 text-sm">{MESES[(p.mes || 1) - 1]} {p.anio}</p>
+                            {p.fecha_pago && <p className="text-xs text-gray-400">Pagado el {new Date(p.fecha_pago).toLocaleDateString('es-AR')}</p>}
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-gray-900 text-sm">${(p.monto || 0).toLocaleString('es-AR')}</p>
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                              p.estado === 'pagado' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              {p.estado === 'pagado' ? '✓ Pagado' : 'Pendiente'}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    })()
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

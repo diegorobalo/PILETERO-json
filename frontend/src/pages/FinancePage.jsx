@@ -179,14 +179,22 @@ export default function FinancePage() {
       }, 0)
   }
 
-  const clientesActivos = clientes.filter(c => c.estado === 'activo')
+  const esMesActual = mes === getMesActual()
+
+  const clientesActivos = clientes.filter(c => {
+    if (c.activo === 0) return false
+    // Clientes creados después del mes seleccionado no existían aún
+    if (c.created_at && mes && c.created_at.slice(0, 7) > mes) return false
+    // En el mes actual no mostrar suspendidos; en meses pasados sí (pueden tener deuda histórica)
+    if (esMesActual && c.estado === 'suspendido') return false
+    return true
+  })
 
   const clientesConStatus = clientesActivos.map(c => {
     const pagosMes = pagos.filter(p => p.cliente_id === c.id && p.fecha?.startsWith(mes))
     const totalPagado = pagosMes.reduce((s, p) => s + (p.monto || 0), 0)
     // Para meses anteriores, si el cliente ya pagó algo ese mes, no mostrar deuda
     // (evita negativos cuando hubo un aumento de precios posterior)
-    const esMesActual = mes === getMesActual()
     const esperado = (!esMesActual && totalPagado > 0) ? totalPagado : (c.precio_abono || 0)
     const deuda = Math.max(0, esperado - totalPagado)
     return { ...c, pagosMes, totalPagado, esperado, deuda, pagado: esperado > 0 && deuda === 0, parcial: totalPagado > 0 && deuda > 0 }
@@ -199,7 +207,7 @@ export default function FinancePage() {
   const pagosFiltrados = mes ? pagos.filter(p => p.fecha?.startsWith(mes) && clientesActivos.some(c => c.id === p.cliente_id)) : pagos.filter(p => clientesActivos.some(c => c.id === p.cliente_id))
 
   return (
-    <div className="min-h-screen bg-sky-50">
+    <div className="min-h-screen bg-sky-50 pb-24">
       <div className="bg-gradient-to-br from-sky-700 to-cyan-600 sticky top-0 z-10 px-4 py-4">
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-xl font-bold text-white">Finanzas</h1>
@@ -278,6 +286,38 @@ export default function FinancePage() {
                   <div className={`bg-white rounded-xl shadow-sm p-3 border ${ganancia >= 0 ? 'border-green-100' : 'border-red-100'} ${totalExtrasMes > 0 ? '' : 'col-start-2'}`}>
                     <p className={`text-xs uppercase tracking-wide mb-1 ${ganancia >= 0 ? 'text-green-500' : 'text-red-400'}`}>Ganancia neta</p>
                     <p className={`text-base font-black ${ganancia >= 0 ? 'text-green-700' : 'text-red-600'}`}>${ganancia.toLocaleString('es-AR')}</p>
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Desglose de extras del mes */}
+            {(() => {
+              const visitasConExtras = visitas.filter(v => {
+                if (!v.fecha?.startsWith(mes)) return false
+                try {
+                  const extr = Array.isArray(v.extras) ? v.extras : JSON.parse(v.extras || '[]')
+                  return extr.some(e => e.monto > 0)
+                } catch { return false }
+              })
+              if (visitasConExtras.length === 0) return null
+              return (
+                <div className="mb-4">
+                  <p className="text-xs font-bold text-purple-500 uppercase tracking-wide mb-2">Detalle de extras</p>
+                  <div className="space-y-1">
+                    {visitasConExtras.map(v => {
+                      const cliente = clientes.find(c => c.id === v.cliente_id)
+                      const extr = Array.isArray(v.extras) ? v.extras : JSON.parse(v.extras || '[]')
+                      return extr.filter(e => e.monto > 0).map((e, i) => (
+                        <div key={`${v.id}-${i}`} className="flex items-center justify-between bg-purple-50 rounded-lg px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-gray-800 truncate">{cliente?.nombre || `Cliente #${v.cliente_id}`}</p>
+                            <p className="text-xs text-gray-500 truncate">{e.descripcion}</p>
+                          </div>
+                          <p className="text-sm font-bold text-purple-700 ml-3 shrink-0">${(e.monto || 0).toLocaleString('es-AR')}</p>
+                        </div>
+                      ))
+                    })}
                   </div>
                 </div>
               )
