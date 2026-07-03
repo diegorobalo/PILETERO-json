@@ -69,7 +69,11 @@ export default function DashboardPage() {
   const pagosMes = pagos.filter(p => p.fecha?.startsWith(mes))
   const cobradoMes = pagosMes.reduce((s, p) => s + (p.monto || 0), 0)
 
-  const clientesConPrecio = clientes.filter(c => c.precio_abono > 0)
+  const clientesConPrecio = clientes.filter(c =>
+    c.precio_abono > 0 &&
+    c.estado === 'activo' &&
+    (!c.fecha_inicio || c.fecha_inicio <= mes)
+  )
   const esperadoMes = clientesConPrecio.reduce((s, c) => s + (c.precio_abono || 0), 0)
   const pendienteMes = Math.max(0, esperadoMes - cobradoMes)
 
