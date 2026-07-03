@@ -201,8 +201,6 @@ export default function FinancePage() {
 
   const clientesActivos = clientes.filter(c => {
     if (c.activo === 0) return false
-    // Clientes creados después del mes seleccionado no existían aún
-    if (c.created_at && mes && c.created_at.slice(0, 7) > mes) return false
     // En el mes actual no mostrar suspendidos; en meses pasados sí (pueden tener deuda histórica)
     if (esMesActual && c.estado === 'suspendido') return false
     return true
