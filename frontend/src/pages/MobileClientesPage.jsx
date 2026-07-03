@@ -24,7 +24,11 @@ export default function MobileClientesPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingCliente, setEditingCliente] = useState(null)
   const [busqueda, setBusqueda] = useState('')
-  const [historial, setHistorial] = useState(null) // { cliente, visitas, loading }
+  const [historial, setHistorial] = useState(null)
+  const [showConsumo, setShowConsumo] = useState(false)
+  const [consumoMes, setConsumoMes] = useState(new Date().toISOString().slice(0, 7))
+  const [consumoData, setConsumoData] = useState(null)
+  const [consumoLoading, setConsumoLoading] = useState(false)
 
   async function verHistorial(cliente) {
     setHistorial({ cliente, visitas: [], pagos: [], loading: true, tab: 'insumos' })
@@ -40,6 +44,50 @@ export default function MobileClientesPage() {
       setHistorial(h => ({ ...h, loading: false, error: 'No se pudo cargar el historial' }))
     }
   }
+
+  async function cargarConsumo(mes) {
+    setConsumoLoading(true)
+    try {
+      const [todasVisitas, inventario] = await Promise.all([
+        apiClient.getVisitas(),
+        apiClient.getInventario(),
+      ])
+      const clientesTodoInc = clientes.filter(c =>
+        c.tipo_abono?.toLowerCase().replace(/\s/g, '').includes('todoincluido')
+      )
+      const result = clientesTodoInc.map(cliente => {
+        const visitasMes = todasVisitas.filter(v =>
+          v.cliente_id === cliente.id && v.fecha?.startsWith(mes)
+        )
+        const productMap = {}
+        for (const v of visitasMes) {
+          try {
+            const quimicos = Array.isArray(v.quimicos_usados)
+              ? v.quimicos_usados : JSON.parse(v.quimicos_usados || '[]')
+            for (const q of quimicos) {
+              const nombre = q.nombre || q.name || 'Desconocido'
+              const cantidad = parseFloat(q.cantidad_usada ?? q.cantidad ?? 0)
+              if (!productMap[nombre]) productMap[nombre] = { nombre, cantidad: 0, unidad: q.unidad || '' }
+              productMap[nombre].cantidad += cantidad
+            }
+          } catch {}
+        }
+        const productos = Object.values(productMap).map(p => {
+          const inv = inventario.find(i => i.nombre.toLowerCase() === p.nombre.toLowerCase())
+          const costo = inv?.precio_unitario ? Math.round(p.cantidad * inv.precio_unitario) : null
+          return { ...p, costo }
+        })
+        const totalCosto = productos.reduce((s, p) => s + (p.costo || 0), 0)
+        return { cliente, productos, totalCosto, nVisitas: visitasMes.length }
+      })
+      setConsumoData(result)
+    } catch { setConsumoData([]) }
+    finally { setConsumoLoading(false) }
+  }
+
+  useEffect(() => {
+    if (showConsumo && clientes.length > 0) cargarConsumo(consumoMes)
+  }, [showConsumo, consumoMes, clientes])
 
   useEffect(() => { loadClientes() }, [])
 
@@ -163,10 +211,16 @@ export default function MobileClientesPage() {
       <div className="bg-gradient-to-br from-sky-700 to-cyan-600 sticky top-0 z-10 px-4 pt-4 pb-3">
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-xl font-bold text-white">Clientes</h1>
-          <button onClick={handleNuevo}
-            className="bg-white text-sky-700 font-bold py-2 px-4 rounded-xl text-sm">
-            + Nuevo
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => setShowConsumo(true)}
+              className="bg-white/20 text-white font-bold py-2 px-3 rounded-xl text-sm">
+              📊
+            </button>
+            <button onClick={handleNuevo}
+              className="bg-white text-sky-700 font-bold py-2 px-4 rounded-xl text-sm">
+              + Nuevo
+            </button>
+          </div>
         </div>
         <input
           type="search"
@@ -343,6 +397,72 @@ export default function MobileClientesPage() {
                       })
                     })()
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal consumo Todo Incluido */}
+      {showConsumo && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={() => setShowConsumo(false)}>
+          <div className="bg-white rounded-t-2xl w-full max-w-md max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <div>
+                <h2 className="text-lg font-black text-gray-900">📊 Consumo</h2>
+                <p className="text-xs text-gray-400">Clientes Todo Incluido</p>
+              </div>
+              <button onClick={() => setShowConsumo(false)} className="text-gray-400 text-2xl leading-none">✕</button>
+            </div>
+
+            <div className="px-5 pb-3">
+              <input
+                type="month"
+                value={consumoMes}
+                onChange={e => setConsumoMes(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+              />
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-5 pb-6">
+              {consumoLoading && <p className="text-center text-gray-400 py-8">Calculando...</p>}
+
+              {!consumoLoading && consumoData?.length === 0 && (
+                <p className="text-center text-gray-400 py-8">No hay clientes con abono Todo Incluido o sin visitas en este período.</p>
+              )}
+
+              {!consumoLoading && consumoData?.map(({ cliente, productos, totalCosto, nVisitas }) => (
+                <div key={cliente.id} className="mb-5 pb-5 border-b border-gray-100 last:border-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <p className="font-bold text-gray-900">{cliente.nombre}</p>
+                      <p className="text-xs text-gray-400">{nVisitas} visita{nVisitas !== 1 ? 's' : ''} en el período</p>
+                    </div>
+                    {totalCosto > 0 && (
+                      <span className="text-sm font-black text-sky-700 bg-sky-50 px-3 py-1 rounded-full">
+                        ${totalCosto.toLocaleString('es-AR')}
+                      </span>
+                    )}
+                  </div>
+
+                  {productos.length === 0 ? (
+                    <p className="text-xs text-gray-300 italic">Sin insumos registrados en este período</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {productos.map((p, i) => (
+                        <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                          <div>
+                            <p className="text-sm text-gray-800 font-medium">{p.nombre}</p>
+                            <p className="text-xs text-gray-400">{p.cantidad % 1 === 0 ? p.cantidad : p.cantidad.toFixed(2)} {p.unidad}</p>
+                          </div>
+                          <p className="text-sm font-semibold text-gray-700 shrink-0 ml-3">
+                            {p.costo !== null ? `$${p.costo.toLocaleString('es-AR')}` : <span className="text-gray-300 text-xs">sin precio</span>}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         </div>
