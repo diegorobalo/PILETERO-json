@@ -9,9 +9,13 @@ export default function ClientsPage() {
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [panelCliente, setPanelCliente] = useState(null) // { cliente, visitas, pagos }
-  const [panelTab, setPanelTab] = useState('visitas') // 'visitas' | 'agua' | 'pagos'
+  const [panelCliente, setPanelCliente] = useState(null)
+  const [panelTab, setPanelTab] = useState('visitas')
   const [loadingPanel, setLoadingPanel] = useState(false)
+  const [showConsumo, setShowConsumo] = useState(false)
+  const [consumoMes, setConsumoMes] = useState(new Date().toISOString().slice(0, 7))
+  const [consumoData, setConsumoData] = useState(null)
+  const [consumoLoading, setConsumoLoading] = useState(false)
 
   useEffect(() => {
     loadClientes()
@@ -67,6 +71,50 @@ export default function ClientsPage() {
     setEditingId(null)
   }
 
+  async function cargarConsumo(mes) {
+    setConsumoLoading(true)
+    try {
+      const [todasVisitas, inventario] = await Promise.all([
+        apiClient.getVisitas(),
+        apiClient.getInventario(),
+      ])
+      const clientesTodoInc = clientes.filter(c =>
+        c.tipo_abono?.toLowerCase().replace(/\s/g, '').includes('todoincluido')
+      )
+      const result = clientesTodoInc.map(cliente => {
+        const visitasMes = todasVisitas.filter(v =>
+          v.cliente_id === cliente.id && v.fecha?.startsWith(mes)
+        )
+        const productMap = {}
+        for (const v of visitasMes) {
+          try {
+            const quimicos = Array.isArray(v.quimicos_usados)
+              ? v.quimicos_usados : JSON.parse(v.quimicos_usados || '[]')
+            for (const q of quimicos) {
+              const nombre = q.nombre || q.name || 'Desconocido'
+              const cantidad = parseFloat(q.cantidad_usada ?? q.cantidad ?? 0)
+              if (!productMap[nombre]) productMap[nombre] = { nombre, cantidad: 0, unidad: q.unidad || '' }
+              productMap[nombre].cantidad += cantidad
+            }
+          } catch {}
+        }
+        const productos = Object.values(productMap).map(p => {
+          const inv = inventario.find(i => i.nombre.toLowerCase() === p.nombre.toLowerCase())
+          const costo = inv?.precio_unitario ? Math.round(p.cantidad * inv.precio_unitario) : null
+          return { ...p, costo }
+        })
+        const totalCosto = productos.reduce((s, p) => s + (p.costo || 0), 0)
+        return { cliente, productos, totalCosto, nVisitas: visitasMes.length }
+      })
+      setConsumoData(result)
+    } catch { setConsumoData([]) }
+    finally { setConsumoLoading(false) }
+  }
+
+  useEffect(() => {
+    if (showConsumo && clientes.length > 0) cargarConsumo(consumoMes)
+  }, [showConsumo, consumoMes, clientes])
+
   async function abrirPanel(cliente) {
     setLoadingPanel(true)
     setPanelTab('visitas')
@@ -91,19 +139,23 @@ export default function ClientsPage() {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-4xl font-bold text-gray-900">👥 Clientes</h1>
-        <button
-          onClick={() => {
-            if (showForm) {
-              setShowForm(false)
-              setEditingId(null)
-            } else {
-              setShowForm(true)
-            }
-          }}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded"
-        >
-          {showForm ? 'Cerrar' : '+ Nuevo Cliente'}
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowConsumo(true)}
+            className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold py-2 px-4 rounded flex items-center gap-2"
+          >
+            📊 Consumo Todo Incluido
+          </button>
+          <button
+            onClick={() => {
+              if (showForm) { setShowForm(false); setEditingId(null) }
+              else setShowForm(true)
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded"
+          >
+            {showForm ? 'Cerrar' : '+ Nuevo Cliente'}
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -187,6 +239,78 @@ export default function ClientsPage() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {showConsumo && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-6" onClick={() => setShowConsumo(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-xl font-black text-gray-900">📊 Consumo — Todo Incluido</h2>
+                <p className="text-sm text-gray-400 mt-0.5">Insumos usados por cliente en el período</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  type="month"
+                  value={consumoMes}
+                  onChange={e => setConsumoMes(e.target.value)}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                />
+                <button onClick={() => setShowConsumo(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">✕</button>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-6 py-4">
+              {consumoLoading && <p className="text-center text-gray-400 py-12">Calculando...</p>}
+
+              {!consumoLoading && consumoData?.length === 0 && (
+                <p className="text-center text-gray-400 py-12">No hay clientes con abono Todo Incluido o sin visitas en este período.</p>
+              )}
+
+              {!consumoLoading && consumoData?.map(({ cliente, productos, totalCosto, nVisitas }) => (
+                <div key={cliente.id} className="mb-6 pb-6 border-b border-gray-100 last:border-0">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="font-bold text-gray-900">{cliente.nombre}</p>
+                      <p className="text-xs text-gray-400">{cliente.direccion} · {nVisitas} visita{nVisitas !== 1 ? 's' : ''}</p>
+                    </div>
+                    {totalCosto > 0 && (
+                      <span className="text-base font-black text-sky-700 bg-sky-50 px-4 py-1.5 rounded-full">
+                        ${totalCosto.toLocaleString('es-AR')}
+                      </span>
+                    )}
+                  </div>
+                  {productos.length === 0 ? (
+                    <p className="text-sm text-gray-300 italic">Sin insumos registrados en este período</p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-gray-400 uppercase tracking-wide border-b border-gray-100">
+                          <th className="text-left pb-2 font-semibold">Producto</th>
+                          <th className="text-right pb-2 font-semibold">Cantidad</th>
+                          <th className="text-right pb-2 font-semibold">Costo est.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {productos.map((p, i) => (
+                          <tr key={i} className="border-b border-gray-50 last:border-0">
+                            <td className="py-2 font-medium text-gray-800">{p.nombre}</td>
+                            <td className="py-2 text-right text-gray-600">
+                              {p.cantidad % 1 === 0 ? p.cantidad : p.cantidad.toFixed(2)} {p.unidad}
+                            </td>
+                            <td className="py-2 text-right font-semibold text-gray-700">
+                              {p.costo !== null ? `$${p.costo.toLocaleString('es-AR')}` : <span className="text-gray-300 text-xs">sin precio</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
