@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { apiClient } from '../services/api'
 import { toastSuccess, toastError, toastOffline } from '../utils/toast'
 
+const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+
 function getMesActual() {
   return new Date().toISOString().slice(0, 7)
 }
@@ -10,8 +12,24 @@ function getMesActual() {
 function formatMesLargo(mesStr) {
   if (!mesStr) return ''
   const [year, month] = mesStr.split('-')
-  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
-  return `${meses[parseInt(month) - 1]} ${year}`
+  return `${MESES_NOMBRE[parseInt(month) - 1]} ${year}`
+}
+
+// Compara un pago contra un mes seleccionado (YYYY-MM).
+// Si el pago tiene campo "mes" (nombre del servicio), matchea por ese nombre + año aprox.
+// Si no tiene "mes", usa la fecha del pago directamente.
+function pagoMatchMes(pago, mesStr) {
+  const [yearStr, mmStr] = mesStr.split('-')
+  const selectedYear = parseInt(yearStr, 10)
+  const mesNombre = MESES_NOMBRE[parseInt(mmStr, 10) - 1]
+  if (pago.mes) {
+    if (pago.mes.toLowerCase() !== mesNombre.toLowerCase()) return false
+    // Aceptar pagos hechos dentro de un año del mes de servicio
+    // (cubre casos como pagar enero en febrero, o diciembre en enero del año siguiente)
+    const pagoYear = parseInt(pago.fecha?.slice(0, 4) || '0', 10)
+    return pagoYear >= selectedYear - 1 && pagoYear <= selectedYear + 1
+  }
+  return pago.fecha?.startsWith(mesStr) ?? false
 }
 
 function formatFecha(dateStr) {
@@ -191,7 +209,7 @@ export default function FinancePage() {
   })
 
   const clientesConStatus = clientesActivos.map(c => {
-    const pagosMes = pagos.filter(p => p.cliente_id === c.id && p.fecha?.startsWith(mes))
+    const pagosMes = pagos.filter(p => p.cliente_id === c.id && pagoMatchMes(p, mes))
     const totalPagado = pagosMes.reduce((s, p) => s + (p.monto || 0), 0)
     // Para meses anteriores, si el cliente ya pagó algo ese mes, no mostrar deuda
     // (evita negativos cuando hubo un aumento de precios posterior)
@@ -204,7 +222,7 @@ export default function FinancePage() {
   const totalEsperado = conPrecio.reduce((s, c) => s + c.esperado, 0)
   const totalCobrado = conPrecio.reduce((s, c) => s + Math.min(c.totalPagado, c.esperado), 0)
   const totalDeuda = conPrecio.reduce((s, c) => s + c.deuda, 0)
-  const pagosFiltrados = mes ? pagos.filter(p => p.fecha?.startsWith(mes) && clientesActivos.some(c => c.id === p.cliente_id)) : pagos.filter(p => clientesActivos.some(c => c.id === p.cliente_id))
+  const pagosFiltrados = mes ? pagos.filter(p => pagoMatchMes(p, mes) && clientesActivos.some(c => c.id === p.cliente_id)) : pagos.filter(p => clientesActivos.some(c => c.id === p.cliente_id))
 
   return (
     <div className="min-h-screen bg-sky-50 pb-24">

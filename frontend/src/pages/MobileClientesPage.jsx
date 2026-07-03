@@ -322,23 +322,25 @@ export default function MobileClientesPage() {
                 historial.pagos.length === 0
                   ? <p className="text-center text-gray-400 py-8">Sin pagos registrados</p>
                   : (() => {
-                      const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
-                      return historial.pagos.map(p => (
-                        <div key={p.id} className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
-                          <div>
-                            <p className="font-semibold text-gray-900 text-sm">{MESES[(p.mes || 1) - 1]} {p.anio}</p>
-                            {p.fecha_pago && <p className="text-xs text-gray-400">Pagado el {new Date(p.fecha_pago).toLocaleDateString('es-AR')}</p>}
+                      return historial.pagos.map(p => {
+                        const fechaPago = p.fecha ? new Date(p.fecha + 'T00:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+                        return (
+                          <div key={p.id} className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
+                            <div>
+                              <p className="font-semibold text-gray-900 text-sm">{p.mes || '—'}</p>
+                              {fechaPago && <p className="text-xs text-gray-400">Pagado el {fechaPago} · {p.metodo_pago || 'efectivo'}</p>}
+                            </div>
+                            <div className="text-right">
+                              <p className="font-bold text-gray-900 text-sm">${(p.monto || 0).toLocaleString('es-AR')}</p>
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                p.estado === 'pagado' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                              }`}>
+                                {p.estado === 'pagado' ? '✓ Pagado' : 'Pendiente'}
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-bold text-gray-900 text-sm">${(p.monto || 0).toLocaleString('es-AR')}</p>
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                              p.estado === 'pagado' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                            }`}>
-                              {p.estado === 'pagado' ? '✓ Pagado' : 'Pendiente'}
-                            </span>
-                          </div>
-                        </div>
-                      ))
+                        )
+                      })
                     })()
               )}
             </div>
