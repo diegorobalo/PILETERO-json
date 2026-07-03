@@ -73,7 +73,7 @@ export default function DashboardPage() {
     c.precio_abono > 0 &&
     c.estado === 'activo' &&
     (!c.fecha_inicio || c.fecha_inicio <= mes) &&
-    (!c.fecha_fin || c.fecha_fin >= mes)
+    (c.estado === 'activo' || !c.fecha_fin || c.fecha_fin >= mes)
   )
   const esperadoMes = clientesConPrecio.reduce((s, c) => s + (c.precio_abono || 0), 0)
   const pendienteMes = Math.max(0, esperadoMes - cobradoMes)

@@ -202,8 +202,8 @@ export default function FinancePage() {
   const clientesActivos = clientes.filter(c => {
     if (c.activo === 0) return false
     if (c.fecha_inicio && mes && c.fecha_inicio > mes) return false
-    // Si tiene fecha de fin de servicio, excluir de meses posteriores
-    if (c.fecha_fin && mes && mes > c.fecha_fin) return false
+    // Si tiene fecha de fin y está suspendido, excluir de meses posteriores al fin
+    if (c.fecha_fin && mes && mes > c.fecha_fin && c.estado === 'suspendido') return false
     if (esMesActual && c.estado === 'suspendido') return false
     return true
   })
