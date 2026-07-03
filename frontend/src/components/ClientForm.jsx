@@ -70,6 +70,7 @@ export default function ClientForm({ initialData, onSubmit, onCancel }) {
     frecuencia_visita: 'semanal',
     grupo_semana: 'A',
     notas_acceso: '',
+    fecha_inicio: '',
   })
   const [diasSeleccionados, setDiasSeleccionados] = useState([])
   const [fotosCliente, setFotosCliente] = useState([])
@@ -388,6 +389,16 @@ export default function ClientForm({ initialData, onSubmit, onCancel }) {
             placeholder="0.00" step="0.01"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+        </div>
+
+        {/* Primer mes de servicio */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Primer mes de servicio</label>
+          <input
+            type="month" name="fecha_inicio" value={formData.fecha_inicio || ''} onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="text-xs text-gray-400 mt-1">Indica desde qué mes este cliente tiene servicio. Los meses anteriores no figurarán como deuda.</p>
         </div>
 
         {/* Días de Visita */}

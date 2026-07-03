@@ -127,6 +127,8 @@ class DatabaseService {
     for (const sql of SCHEMA) {
       await db.execute(sql);
     }
+    // Migrations: add new columns to existing tables
+    try { await db.execute("ALTER TABLE clientes ADD COLUMN fecha_inicio TEXT"); } catch {}
     console.log('Turso database initialized');
   }
 
@@ -156,19 +158,19 @@ class DatabaseService {
     const {
       nombre, direccion, telefono, volumen_litros, tipo_construccion,
       equipamiento, modelo_filtro, tipo_abono, precio_abono,
-      dias_visita, frecuencia_visita, grupo_semana, notas_acceso
+      dias_visita, frecuencia_visita, grupo_semana, notas_acceso, fecha_inicio
     } = data;
 
     const result = await db.execute({
       sql: `INSERT INTO clientes (nombre, direccion, telefono, volumen_litros, tipo_construccion,
             equipamiento, modelo_filtro, tipo_abono, precio_abono, dias_visita,
-            frecuencia_visita, grupo_semana, notas_acceso, activo, estado, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'activo', ?, ?)`,
+            frecuencia_visita, grupo_semana, notas_acceso, fecha_inicio, activo, estado, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'activo', ?, ?)`,
       args: [nombre, direccion || null, telefono || null, volumen_litros || null,
              tipo_construccion || null, equipamiento || null, modelo_filtro || null,
              tipo_abono || null, precio_abono || null, dias_visita || null,
              frecuencia_visita || 'semanal', grupo_semana || 'A', notas_acceso || null,
-             now(), now()]
+             fecha_inicio || null, now(), now()]
     });
 
     return this.getClienteById(Number(result.lastInsertRowid));
@@ -179,7 +181,7 @@ class DatabaseService {
     const allowedFields = [
       'nombre', 'direccion', 'telefono', 'volumen_litros', 'tipo_construccion',
       'equipamiento', 'modelo_filtro', 'tipo_abono', 'precio_abono', 'dias_visita',
-      'frecuencia_visita', 'grupo_semana', 'notas_acceso', 'activo'
+      'frecuencia_visita', 'grupo_semana', 'notas_acceso', 'fecha_inicio', 'activo'
     ];
 
     const updates = [];
