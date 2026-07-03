@@ -211,11 +211,22 @@ export default function FinancePage() {
   const clientesConStatus = clientesActivos.map(c => {
     const pagosMes = pagos.filter(p => p.cliente_id === c.id && pagoMatchMes(p, mes))
     const totalPagado = pagosMes.reduce((s, p) => s + (p.monto || 0), 0)
-    // Para meses anteriores, si el cliente ya pagó algo ese mes, no mostrar deuda
-    // (evita negativos cuando hubo un aumento de precios posterior)
-    const esperado = (!esMesActual && totalPagado > 0) ? totalPagado : (c.precio_abono || 0)
+
+    const extrasCliente = visitas
+      .filter(v => v.cliente_id === c.id && v.fecha?.startsWith(mes))
+      .reduce((sum, v) => {
+        try {
+          const extr = Array.isArray(v.extras) ? v.extras : JSON.parse(v.extras || '[]')
+          return sum + extr.reduce((s, e) => s + (e.monto || 0), 0)
+        } catch { return sum }
+      }, 0)
+
+    const abono = c.precio_abono || 0
+    // Para meses anteriores ya pagados, usar lo cobrado como referencia (tolera cambios de precio)
+    const esperado = (!esMesActual && totalPagado > 0) ? totalPagado : abono + extrasCliente
     const deuda = Math.max(0, esperado - totalPagado)
-    return { ...c, pagosMes, totalPagado, esperado, deuda, pagado: esperado > 0 && deuda === 0, parcial: totalPagado > 0 && deuda > 0 }
+    return { ...c, pagosMes, totalPagado, esperado, deuda, abono, extrasCliente,
+             pagado: esperado > 0 && deuda === 0, parcial: totalPagado > 0 && deuda > 0 }
   })
 
   const conPrecio = clientesConStatus.filter(c => c.esperado > 0)
@@ -353,11 +364,18 @@ export default function FinancePage() {
                     <p className="font-bold text-gray-900">{c.nombre}</p>
                     <p className="text-sm text-gray-500">{c.direccion}</p>
                     {c.esperado > 0 ? (
-                      <p className={`text-sm mt-1 font-medium ${c.pagado ? 'text-green-600' : c.parcial ? 'text-yellow-700' : 'text-red-600'}`}>
-                        {c.pagado ? `✓ Pagó $${c.totalPagado.toLocaleString('es-AR')}` :
-                         c.parcial ? `Pagó $${c.totalPagado.toLocaleString('es-AR')} · Debe $${c.deuda.toLocaleString('es-AR')}` :
-                         `Debe $${c.esperado.toLocaleString('es-AR')}`}
-                      </p>
+                      <>
+                        {c.extrasCliente > 0 && (
+                          <p className="text-xs text-purple-600 mt-1">
+                            Abono ${c.abono.toLocaleString('es-AR')} + Extra ${c.extrasCliente.toLocaleString('es-AR')} = ${c.esperado.toLocaleString('es-AR')}
+                          </p>
+                        )}
+                        <p className={`text-sm mt-0.5 font-medium ${c.pagado ? 'text-green-600' : c.parcial ? 'text-yellow-700' : 'text-red-600'}`}>
+                          {c.pagado ? `✓ Pagó $${c.totalPagado.toLocaleString('es-AR')}` :
+                           c.parcial ? `Pagó $${c.totalPagado.toLocaleString('es-AR')} · Debe $${c.deuda.toLocaleString('es-AR')}` :
+                           `Debe $${c.esperado.toLocaleString('es-AR')}`}
+                        </p>
+                      </>
                     ) : (
                       <p className="text-xs text-gray-400 mt-1">Sin precio de abono</p>
                     )}
