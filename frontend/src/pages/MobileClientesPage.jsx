@@ -53,7 +53,7 @@ export default function MobileClientesPage() {
         apiClient.getInventario(),
       ])
       const clientesTodoInc = clientes.filter(c =>
-        c.tipo_abono?.toLowerCase().replace(/\s/g, '').includes('todoincluido')
+        c.tipo_abono === 'todo_incluido'
       )
       const result = clientesTodoInc.map(cliente => {
         const visitasMes = todasVisitas.filter(v =>
