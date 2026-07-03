@@ -71,16 +71,15 @@ export default function ClientsPage() {
     setEditingId(null)
   }
 
-  async function cargarConsumo(mes) {
+  async function cargarConsumo(mes, listaClientes) {
     setConsumoLoading(true)
+    setConsumoData(null)
     try {
       const [todasVisitas, inventario] = await Promise.all([
         apiClient.getVisitas(),
         apiClient.getInventario(),
       ])
-      const clientesTodoInc = clientes.filter(c =>
-        c.tipo_abono === 'todo_incluido'
-      )
+      const clientesTodoInc = listaClientes.filter(c => c.tipo_abono === 'todo_incluido')
       const result = clientesTodoInc.map(cliente => {
         const visitasMes = todasVisitas.filter(v =>
           v.cliente_id === cliente.id && v.fecha?.startsWith(mes)
@@ -107,13 +106,12 @@ export default function ClientsPage() {
         return { cliente, productos, totalCosto, nVisitas: visitasMes.length }
       })
       setConsumoData(result)
-    } catch { setConsumoData([]) }
-    finally { setConsumoLoading(false) }
+    } catch (err) {
+      setConsumoData({ error: err.message || 'Error al cargar datos' })
+    } finally {
+      setConsumoLoading(false)
+    }
   }
-
-  useEffect(() => {
-    if (showConsumo && clientes.length > 0) cargarConsumo(consumoMes)
-  }, [showConsumo, consumoMes, clientes])
 
   async function abrirPanel(cliente) {
     setLoadingPanel(true)
@@ -141,7 +139,7 @@ export default function ClientsPage() {
         <h1 className="text-4xl font-bold text-gray-900">👥 Clientes</h1>
         <div className="flex gap-3">
           <button
-            onClick={() => setShowConsumo(true)}
+            onClick={() => { setShowConsumo(true); cargarConsumo(consumoMes, clientes) }}
             className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold py-2 px-4 rounded flex items-center gap-2"
           >
             📊 Consumo Todo Incluido
@@ -254,7 +252,7 @@ export default function ClientsPage() {
                 <input
                   type="month"
                   value={consumoMes}
-                  onChange={e => setConsumoMes(e.target.value)}
+                  onChange={e => { setConsumoMes(e.target.value); cargarConsumo(e.target.value, clientes) }}
                   className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 <button onClick={() => setShowConsumo(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">✕</button>
@@ -264,11 +262,15 @@ export default function ClientsPage() {
             <div className="overflow-y-auto flex-1 px-6 py-4">
               {consumoLoading && <p className="text-center text-gray-400 py-12">Calculando...</p>}
 
-              {!consumoLoading && consumoData?.length === 0 && (
-                <p className="text-center text-gray-400 py-12">No hay clientes con abono Todo Incluido o sin visitas en este período.</p>
+              {!consumoLoading && consumoData?.error && (
+                <p className="text-center text-red-400 py-12">Error: {consumoData.error}</p>
               )}
 
-              {!consumoLoading && consumoData?.map(({ cliente, productos, totalCosto, nVisitas }) => (
+              {!consumoLoading && Array.isArray(consumoData) && consumoData.length === 0 && (
+                <p className="text-center text-gray-400 py-12">No hay clientes con abono "Todo Incluido" registrados.</p>
+              )}
+
+              {!consumoLoading && Array.isArray(consumoData) && consumoData.map(({ cliente, productos, totalCosto, nVisitas }) => (
                 <div key={cliente.id} className="mb-6 pb-6 border-b border-gray-100 last:border-0">
                   <div className="flex items-center justify-between mb-3">
                     <div>

@@ -45,14 +45,15 @@ export default function MobileClientesPage() {
     }
   }
 
-  async function cargarConsumo(mes) {
+  async function cargarConsumo(mes, listaClientes) {
     setConsumoLoading(true)
+    setConsumoData(null)
     try {
       const [todasVisitas, inventario] = await Promise.all([
         apiClient.getVisitas(),
         apiClient.getInventario(),
       ])
-      const clientesTodoInc = clientes.filter(c =>
+      const clientesTodoInc = listaClientes.filter(c =>
         c.tipo_abono === 'todo_incluido'
       )
       const result = clientesTodoInc.map(cliente => {
@@ -81,13 +82,12 @@ export default function MobileClientesPage() {
         return { cliente, productos, totalCosto, nVisitas: visitasMes.length }
       })
       setConsumoData(result)
-    } catch { setConsumoData([]) }
-    finally { setConsumoLoading(false) }
+    } catch (err) {
+      setConsumoData({ error: err.message || 'Error al cargar datos' })
+    } finally {
+      setConsumoLoading(false)
+    }
   }
-
-  useEffect(() => {
-    if (showConsumo && clientes.length > 0) cargarConsumo(consumoMes)
-  }, [showConsumo, consumoMes, clientes])
 
   useEffect(() => { loadClientes() }, [])
 
@@ -212,7 +212,7 @@ export default function MobileClientesPage() {
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-xl font-bold text-white">Clientes</h1>
           <div className="flex gap-2">
-            <button onClick={() => setShowConsumo(true)}
+            <button onClick={() => { setShowConsumo(true); cargarConsumo(consumoMes, clientes) }}
               className="bg-white/20 text-white font-bold py-2 px-3 rounded-xl text-sm">
               📊
             </button>
@@ -418,7 +418,7 @@ export default function MobileClientesPage() {
               <input
                 type="month"
                 value={consumoMes}
-                onChange={e => setConsumoMes(e.target.value)}
+                onChange={e => { setConsumoMes(e.target.value); cargarConsumo(e.target.value, clientes) }}
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
               />
             </div>
@@ -426,11 +426,15 @@ export default function MobileClientesPage() {
             <div className="overflow-y-auto flex-1 px-5 pb-6">
               {consumoLoading && <p className="text-center text-gray-400 py-8">Calculando...</p>}
 
-              {!consumoLoading && consumoData?.length === 0 && (
-                <p className="text-center text-gray-400 py-8">No hay clientes con abono Todo Incluido o sin visitas en este período.</p>
+              {!consumoLoading && consumoData?.error && (
+                <p className="text-center text-red-400 py-8">Error: {consumoData.error}</p>
               )}
 
-              {!consumoLoading && consumoData?.map(({ cliente, productos, totalCosto, nVisitas }) => (
+              {!consumoLoading && Array.isArray(consumoData) && consumoData.length === 0 && (
+                <p className="text-center text-gray-400 py-8">No hay clientes con abono "Todo Incluido" registrados.</p>
+              )}
+
+              {!consumoLoading && Array.isArray(consumoData) && consumoData.map(({ cliente, productos, totalCosto, nVisitas }) => (
                 <div key={cliente.id} className="mb-5 pb-5 border-b border-gray-100 last:border-0">
                   <div className="flex items-center justify-between mb-2">
                     <div>
