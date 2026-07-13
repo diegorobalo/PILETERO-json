@@ -27,12 +27,10 @@ function pagoMatchMes(pago, mesStr) {
     if (pago.mes.toLowerCase() !== mesNombre.toLowerCase()) return false
     const pagoYear = parseInt(pago.fecha?.slice(0, 4) || '0', 10)
     const pagoMm  = parseInt(pago.fecha?.slice(5, 7) || '0', 10)
-    // Pago del mismo año → siempre ok
-    if (pagoYear === selectedYear) return true
-    // Pago del año siguiente solo si el servicio fue en Oct-Dic y el pago en Ene-Mar
-    // (cubre el caso: diciembre de servicio cobrado en enero del año siguiente)
-    if (pagoYear === selectedYear + 1 && selectedMm >= 10 && pagoMm <= 3) return true
-    return false
+    // Pago en Ene-Mar para un mes de servicio Oct-Dic → pago del año SIGUIENTE al servicio
+    // Ej: cobrado el 5 de enero 2026 por "Diciembre" → es Diciembre 2025, no 2026
+    if (selectedMm >= 10 && pagoMm <= 3) return pagoYear === selectedYear + 1
+    return pagoYear === selectedYear
   }
   return pago.fecha?.startsWith(mesStr) ?? false
 }
