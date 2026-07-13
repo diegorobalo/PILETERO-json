@@ -99,7 +99,12 @@ export default function ClientsPage() {
         }
         const productos = Object.values(productMap).map(p => {
           const inv = inventario.find(i => i.nombre.toLowerCase() === p.nombre.toLowerCase())
-          const costo = inv?.precio_unitario ? Math.round(p.cantidad * inv.precio_unitario) : null
+          let costo = null
+          if (inv?.precio_unitario) {
+            // precio_unitario se ingresa por kg (si unidad='g') o por litro (si unidad='ml')
+            const divisor = (p.unidad === 'g' || p.unidad === 'ml') ? 1000 : 1
+            costo = Math.round(p.cantidad * inv.precio_unitario / divisor)
+          }
           return { ...p, costo }
         })
         const totalCosto = productos.reduce((s, p) => s + (p.costo || 0), 0)

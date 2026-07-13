@@ -17,7 +17,7 @@ export default function MobileInventarioPage() {
   const [modal, setModal] = useState(null)
   const [cantidad, setCantidad] = useState('')
   const [showNuevo, setShowNuevo] = useState(false)
-  const [nuevoForm, setNuevoForm] = useState({ nombre: '', unidad: 'g', stock_actual: '', stock_minimo: '' })
+  const [nuevoForm, setNuevoForm] = useState({ nombre: '', unidad: 'g', stock_actual: '', stock_minimo: '', precio_unitario: '' })
   const [historialModal, setHistorialModal] = useState(null) // { insumo, movimientos }
 
   useEffect(() => { cargar() }, [])
@@ -71,9 +71,10 @@ export default function MobileInventarioPage() {
         ...nuevoForm,
         stock_actual: Number(nuevoForm.stock_actual) || 0,
         stock_minimo: Number(nuevoForm.stock_minimo) || 0,
+        precio_unitario: nuevoForm.precio_unitario ? Number(nuevoForm.precio_unitario) : null,
       })
       setShowNuevo(false)
-      setNuevoForm({ nombre: '', unidad: 'g', stock_actual: '', stock_minimo: '' })
+      setNuevoForm({ nombre: '', unidad: 'g', stock_actual: '', stock_minimo: '', precio_unitario: '' })
       await cargar()
       toastSuccess('Insumo creado')
     } catch (err) {
@@ -124,6 +125,20 @@ export default function MobileInventarioPage() {
               onChange={e => setNuevoForm(f => ({ ...f, stock_minimo: e.target.value }))}
               placeholder="0"
               className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-center text-xl font-bold focus:border-blue-500 focus:outline-none" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Precio por {nuevoForm.unidad === 'g' ? 'kg' : nuevoForm.unidad === 'ml' ? 'litro' : (nuevoForm.unidad || 'unidad')} ($)
+            </label>
+            <input type="number" value={nuevoForm.precio_unitario}
+              onChange={e => setNuevoForm(f => ({ ...f, precio_unitario: e.target.value }))}
+              placeholder="Opcional"
+              className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-center text-xl font-bold focus:border-blue-500 focus:outline-none" />
+            {(nuevoForm.unidad === 'g' || nuevoForm.unidad === 'ml') && (
+              <p className="text-xs text-gray-400 mt-1">
+                Ej: si comprás 1 {nuevoForm.unidad === 'g' ? 'kilo' : 'litro'} por $5000, ingresá 5000
+              </p>
+            )}
           </div>
           <button onClick={guardarNuevo}
             className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl text-lg mt-2">

@@ -146,8 +146,15 @@ export default function InventarioPage() {
               <input type="number" value={form.stock_minimo} onChange={e => setForm(f => ({ ...f, stock_minimo: e.target.value }))} className="w-full border border-gray-300 rounded px-3 py-2" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Precio por {form.unidad || 'unidad'} ($)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Precio por {form.unidad === 'g' ? 'kg' : form.unidad === 'ml' ? 'litro' : (form.unidad || 'unidad')} ($)
+              </label>
               <input type="number" value={form.precio_unitario} onChange={e => setForm(f => ({ ...f, precio_unitario: e.target.value }))} className="w-full border border-gray-300 rounded px-3 py-2" placeholder="Opcional" />
+              {(form.unidad === 'g' || form.unidad === 'ml') && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Ej: si comprás 1 {form.unidad === 'g' ? 'kilo' : 'litro'} por $5000, ingresá 5000
+                </p>
+              )}
             </div>
           </div>
           <div className="flex gap-3">
