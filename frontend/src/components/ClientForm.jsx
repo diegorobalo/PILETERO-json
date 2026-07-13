@@ -379,6 +379,7 @@ export default function ClientForm({ initialData, onSubmit, onCancel }) {
             <option value="">Seleccionar...</option>
             <option value="mano_de_obra">Mano de Obra</option>
             <option value="todo_incluido">Todo Incluido</option>
+            <option value="eventual">Eventual</option>
           </select>
         </div>
 
