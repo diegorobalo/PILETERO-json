@@ -21,13 +21,18 @@ function formatMesLargo(mesStr) {
 function pagoMatchMes(pago, mesStr) {
   const [yearStr, mmStr] = mesStr.split('-')
   const selectedYear = parseInt(yearStr, 10)
-  const mesNombre = MESES_NOMBRE[parseInt(mmStr, 10) - 1]
+  const selectedMm = parseInt(mmStr, 10)
+  const mesNombre = MESES_NOMBRE[selectedMm - 1]
   if (pago.mes) {
     if (pago.mes.toLowerCase() !== mesNombre.toLowerCase()) return false
-    // Aceptar pagos hechos dentro de un año del mes de servicio
-    // (cubre casos como pagar enero en febrero, o diciembre en enero del año siguiente)
     const pagoYear = parseInt(pago.fecha?.slice(0, 4) || '0', 10)
-    return pagoYear >= selectedYear - 1 && pagoYear <= selectedYear + 1
+    const pagoMm  = parseInt(pago.fecha?.slice(5, 7) || '0', 10)
+    // Pago del mismo año → siempre ok
+    if (pagoYear === selectedYear) return true
+    // Pago del año siguiente solo si el servicio fue en Oct-Dic y el pago en Ene-Mar
+    // (cubre el caso: diciembre de servicio cobrado en enero del año siguiente)
+    if (pagoYear === selectedYear + 1 && selectedMm >= 10 && pagoMm <= 3) return true
+    return false
   }
   return pago.fecha?.startsWith(mesStr) ?? false
 }
