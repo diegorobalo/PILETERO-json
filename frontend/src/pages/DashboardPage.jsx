@@ -106,24 +106,20 @@ export default function DashboardPage() {
           {/* Stats cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {[
-              { emoji: '👥', value: clientes.length, label: 'Clientes activos', color: 'bg-sky-500', num: 'text-gray-900' },
-              { emoji: '✅', value: visitasMes.length, label: `Visitas en ${mesNombre}`, color: 'bg-violet-500', num: 'text-violet-700' },
-              { emoji: '💰', value: formatCurrency(cobradoMes), label: `Cobrado ${mesNombre}`, color: 'bg-green-500', num: 'text-green-700' },
+              { emoji: '👥', value: clientes.length,          label: 'Clientes activos',    grad: 'from-sky-500 to-sky-600' },
+              { emoji: '✅', value: visitasMes.length,        label: `Visitas ${mesNombre}`, grad: 'from-violet-500 to-violet-600' },
+              { emoji: '💰', value: formatCurrency(cobradoMes), label: `Cobrado ${mesNombre}`, grad: 'from-emerald-500 to-emerald-600' },
               {
                 emoji: pendienteMes > 0 ? '⏳' : '🎉',
                 value: formatCurrency(pendienteMes),
                 label: 'Pendiente cobro',
-                color: pendienteMes > 0 ? 'bg-red-500' : 'bg-gray-300',
-                num: pendienteMes > 0 ? 'text-red-600' : 'text-gray-400',
+                grad: pendienteMes > 0 ? 'from-red-500 to-red-600' : 'from-slate-400 to-slate-500',
               },
-            ].map(({ emoji, value, label, color, num }) => (
-              <div key={label} className="bg-white rounded-xl shadow-card overflow-hidden">
-                <div className={`h-1 ${color}`} />
-                <div className="p-5">
-                  <p className="text-2xl mb-2">{emoji}</p>
-                  <p className={`text-3xl font-black ${num}`}>{value}</p>
-                  <p className="text-sm text-gray-500 mt-1">{label}</p>
-                </div>
+            ].map(({ emoji, value, label, grad }) => (
+              <div key={label} className={`bg-gradient-to-br ${grad} rounded-2xl p-5 text-white shadow-lg`}>
+                <p className="text-3xl mb-3">{emoji}</p>
+                <p className="text-3xl font-black leading-none">{value}</p>
+                <p className="text-sm text-white/70 mt-2">{label}</p>
               </div>
             ))}
           </div>
