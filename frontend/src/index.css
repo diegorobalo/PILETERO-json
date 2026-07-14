@@ -24,9 +24,36 @@
 .stagger-item:nth-child(7) { animation-delay: 255ms; }
 .stagger-item:nth-child(n+8) { animation-delay: 280ms; }
 
+/* ── Modal / sheet / panel animations ── */
+@keyframes modal-dialog-in {
+  from { opacity: 0; transform: scale(0.96) translateY(4px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+@keyframes bottom-sheet-in {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes side-panel-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.modal-overlay { animation: overlay-in       200ms var(--ease-out)    both; }
+.modal-dialog  { animation: modal-dialog-in  220ms var(--ease-out)    both; }
+.bottom-sheet  { animation: bottom-sheet-in  350ms var(--ease-drawer) both; }
+.side-panel    { animation: side-panel-in    300ms var(--ease-drawer) both; }
+
 /* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
-  .stagger-item { animation: none; }
+  .stagger-item,
+  .modal-overlay,
+  .modal-dialog,
+  .bottom-sheet,
+  .side-panel { animation: none; }
   *,
   *::before,
   *::after {

@@ -571,7 +571,7 @@ export default function AgendaPage() {
       {/* Modal hoja de ruta */}
       {modalRuta && (
         <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setModalRuta(null)}>
-          <div className="bg-white rounded-t-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+          <div className="bottom-sheet bg-white rounded-t-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 pt-5 pb-3">
               <h2 className="text-lg font-bold text-gray-900">🗺️ Ruta de hoy</h2>
               <button onClick={() => setModalRuta(null)} className="text-gray-400 text-xl font-bold w-8 h-8 flex items-center justify-center">✕</button>
@@ -605,7 +605,7 @@ export default function AgendaPage() {
       {/* Modal de motivo para saltar */}
       {modalSaltar && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end justify-center z-50">
-          <div className="bg-white rounded-t-2xl w-full max-w-md p-6">
+          <div className="bottom-sheet bg-white rounded-t-2xl w-full max-w-md p-6">
             <h2 className="text-lg font-bold text-gray-900 mb-4">¿Por qué saltás esta visita?</h2>
             <div className="space-y-2 mb-6">
               {[

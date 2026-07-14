@@ -522,7 +522,7 @@ export default function FinancePage() {
       {/* Modal aumento de precios */}
       {showAumento && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+          <div className="modal-dialog bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-1">Ajuste general de precios</h2>
             <p className="text-gray-500 text-sm mb-5">Positivo = aumento · Negativo = descuento. Se aplica a todos los clientes con precio de abono.</p>
             <div className="mb-4">
@@ -568,7 +568,7 @@ export default function FinancePage() {
       {/* Modal de pago */}
       {modalCliente && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+          <div className="modal-dialog bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-1">Registrar pago</h2>
             <p className="text-gray-500 text-sm mb-5">{modalCliente.nombre}</p>
             <div className="space-y-4">
@@ -699,7 +699,7 @@ export default function FinancePage() {
       {/* Modal de nuevo gasto */}
       {modalGasto && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+          <div className="modal-dialog bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-5">Registrar gasto</h2>
             <div className="space-y-4">
               <div>

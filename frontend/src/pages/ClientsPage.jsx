@@ -247,7 +247,7 @@ export default function ClientsPage() {
 
       {showConsumo && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-6" onClick={() => setShowConsumo(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="modal-dialog bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
               <div>
                 <h2 className="text-xl font-black text-gray-900">📊 Consumo — Todo Incluido</h2>
@@ -323,13 +323,13 @@ export default function ClientsPage() {
 
       {loadingPanel && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg px-6 py-4 text-gray-600">Cargando historial...</div>
+          <div className="modal-dialog bg-white rounded-lg px-6 py-4 text-gray-600">Cargando historial...</div>
         </div>
       )}
 
       {panelCliente && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-end" onClick={() => setPanelCliente(null)}>
-          <div className="bg-white w-full max-w-lg h-full overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="side-panel bg-white w-full max-w-lg h-full overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-gray-900">{panelCliente.cliente.nombre}</h2>
