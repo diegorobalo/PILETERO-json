@@ -47,13 +47,25 @@
 .bottom-sheet  { animation: bottom-sheet-in  350ms var(--ease-drawer) both; }
 .side-panel    { animation: side-panel-in    300ms var(--ease-drawer) both; }
 
+/* ── Swimmer float ── */
+@keyframes swim-float {
+  0%,  100% { transform: translateY(0)    rotate(-4deg); }
+  30%        { transform: translateY(-9px) rotate(2deg);  }
+  70%        { transform: translateY(4px)  rotate(-6deg); }
+}
+.swim-float {
+  display: inline-block;
+  animation: swim-float 2.8s ease-in-out infinite;
+}
+
 /* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
   .stagger-item,
   .modal-overlay,
   .modal-dialog,
   .bottom-sheet,
-  .side-panel { animation: none; }
+  .side-panel,
+  .swim-float { animation: none; }
   *,
   *::before,
   *::after {

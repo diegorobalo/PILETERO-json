@@ -428,7 +428,7 @@ export default function AgendaPage() {
         {/* Lista de clientes */}
         {clientesDeHoy.length === 0 ? (
           <div className="text-center py-16">
-            <div className="text-5xl mb-4">🏊</div>
+            <div className="text-5xl mb-4 swim-float">🏊</div>
             <h2 className="text-lg font-bold text-gray-800 mb-2">
               {todosClientes.length === 0
                 ? 'Sin clientes cargados'
