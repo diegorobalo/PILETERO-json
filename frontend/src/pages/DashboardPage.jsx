@@ -33,6 +33,24 @@ function diasRestantesMes() {
   return fin.getDate() - ahora.getDate()
 }
 
+function useCountUp(target, duration = 900) {
+  const [val, setVal] = useState(0)
+  useEffect(() => {
+    if (!target) { setVal(0); return }
+    let raf
+    const start = performance.now()
+    function step(now) {
+      const t = Math.min((now - start) / duration, 1)
+      setVal(Math.round((1 - Math.pow(1 - t, 3)) * target))
+      if (t < 1) raf = requestAnimationFrame(step)
+      else setVal(target)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [target, duration])
+  return val
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
@@ -84,6 +102,11 @@ export default function DashboardPage() {
   const mesNombre = new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
   const fechaHoyLarga = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
 
+  const animClientes  = useCountUp(clientes.length)
+  const animVisitas   = useCountUp(visitasMes.length)
+  const animCobrado   = useCountUp(cobradoMes)
+  const animPendiente = useCountUp(pendienteMes)
+
   return (
     <div className="w-full min-h-screen bg-gray-50 p-6">
       {/* Header */}
@@ -106,19 +129,20 @@ export default function DashboardPage() {
           {/* Stats cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {[
-              { emoji: '👥', value: clientes.length,          label: 'Clientes activos',    grad: 'from-sky-500 to-sky-600' },
-              { emoji: '✅', value: visitasMes.length,        label: `Visitas ${mesNombre}`, grad: 'from-violet-500 to-violet-600' },
-              { emoji: '💰', value: formatCurrency(cobradoMes), label: `Cobrado ${mesNombre}`, grad: 'from-emerald-500 to-emerald-600' },
+              { emoji: '👥', anim: animClientes,  fmt: n => n,         label: 'Clientes activos',    grad: 'from-sky-500 to-sky-600' },
+              { emoji: '✅', anim: animVisitas,   fmt: n => n,         label: `Visitas ${mesNombre}`, grad: 'from-violet-500 to-violet-600' },
+              { emoji: '💰', anim: animCobrado,   fmt: formatCurrency, label: `Cobrado ${mesNombre}`, grad: 'from-emerald-500 to-emerald-600' },
               {
                 emoji: pendienteMes > 0 ? '⏳' : '🎉',
-                value: formatCurrency(pendienteMes),
+                anim: animPendiente,
+                fmt: formatCurrency,
                 label: 'Pendiente cobro',
                 grad: pendienteMes > 0 ? 'from-red-500 to-red-600' : 'from-slate-400 to-slate-500',
               },
-            ].map(({ emoji, value, label, grad }) => (
+            ].map(({ emoji, anim, fmt, label, grad }) => (
               <div key={label} className={`bg-gradient-to-br ${grad} rounded-2xl p-5 text-white shadow-lg`}>
                 <p className="text-3xl mb-3">{emoji}</p>
-                <p className="text-3xl font-black leading-none">{value}</p>
+                <p className="text-3xl font-black leading-none">{fmt(anim)}</p>
                 <p className="text-sm text-white/70 mt-2">{label}</p>
               </div>
             ))}

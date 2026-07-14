@@ -58,6 +58,13 @@
   animation: swim-float 2.8s ease-in-out infinite;
 }
 
+/* ── Wave header animation ── */
+@keyframes wave-move {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.wave-anim { animation: wave-move 3s linear infinite; }
+
 /* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
   .stagger-item,
@@ -65,7 +72,8 @@
   .modal-dialog,
   .bottom-sheet,
   .side-panel,
-  .swim-float { animation: none; }
+  .swim-float,
+  .wave-anim { animation: none; }
   *,
   *::before,
   *::after {

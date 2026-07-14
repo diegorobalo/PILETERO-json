@@ -383,6 +383,12 @@ export default function AgendaPage() {
             </button>
           )}
         </div>
+        <div className="absolute bottom-0 left-0 right-0 h-5 overflow-hidden pointer-events-none" aria-hidden="true">
+          <svg viewBox="0 0 800 20" preserveAspectRatio="none" className="wave-anim absolute top-0 left-0 h-full" style={{width:'200%'}}>
+            <path d="M0,10 C133,0 266,20 400,10 C533,0 666,20 800,10 L800,20 L0,20 Z" fill="white" fillOpacity="0.12"/>
+            <path d="M0,14 C150,3 250,20 400,13 C550,5 650,20 800,14 L800,20 L0,20 Z" fill="white" fillOpacity="0.28"/>
+          </svg>
+        </div>
       </div>
 
       {vistaMode === 'hoy' && (
