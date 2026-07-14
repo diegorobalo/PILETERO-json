@@ -92,21 +92,21 @@ export default function PhotoUpload({ fotos, onAddFoto, onRemoveFoto }) {
 
       <div className="grid grid-cols-3 gap-2 mb-4">
         <button onClick={() => antesRef.current?.click()}
-          className="py-4 bg-blue-500 text-white font-bold rounded-xl hover:bg-blue-600 active:scale-95 transition-all flex flex-col items-center justify-center gap-1">
+          className="py-4 bg-blue-500 text-white font-bold rounded-xl hover:bg-blue-600 active:scale-[0.97] transition-[transform,background-color] duration-[160ms] flex flex-col items-center justify-center gap-1">
           <span className="text-xl">📷</span>
           <span className="text-xs">Antes</span>
           {fotosAntes.length > 0 && <span className="text-xs bg-white text-blue-600 rounded-full px-2">✓ {fotosAntes.length}</span>}
         </button>
 
         <button onClick={() => despuesRef.current?.click()}
-          className="py-4 bg-blue-500 text-white font-bold rounded-xl hover:bg-blue-600 active:scale-95 transition-all flex flex-col items-center justify-center gap-1">
+          className="py-4 bg-blue-500 text-white font-bold rounded-xl hover:bg-blue-600 active:scale-[0.97] transition-[transform,background-color] duration-[160ms] flex flex-col items-center justify-center gap-1">
           <span className="text-xl">📷</span>
           <span className="text-xs">Después</span>
           {fotosDespues.length > 0 && <span className="text-xs bg-white text-blue-600 rounded-full px-2">✓ {fotosDespues.length}</span>}
         </button>
 
         <button onClick={() => extraRef.current?.click()}
-          className="py-4 bg-gray-500 text-white font-bold rounded-xl hover:bg-gray-600 active:scale-95 transition-all flex flex-col items-center justify-center gap-1">
+          className="py-4 bg-gray-500 text-white font-bold rounded-xl hover:bg-gray-600 active:scale-[0.97] transition-[transform,background-color] duration-[160ms] flex flex-col items-center justify-center gap-1">
           <span className="text-xl">📷</span>
           <span className="text-xs">Extra</span>
         </button>

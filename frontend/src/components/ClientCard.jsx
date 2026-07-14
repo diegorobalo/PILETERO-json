@@ -11,7 +11,7 @@ export default function ClientCard({ cliente, hora, estado, onStart, onWhatsApp 
   return (
     <button
       onClick={() => onStart(cliente.id)}
-      className="w-full text-left bg-white rounded-2xl shadow-card px-4 pt-4 pb-3 active:scale-[0.98] transition-all"
+      className="w-full text-left bg-white rounded-2xl shadow-card px-4 pt-4 pb-3 active:scale-[0.97] transition-transform duration-[160ms]"
     >
       <div className="flex items-center justify-between gap-3 mb-0.5">
         <h3 className="text-base font-bold text-gray-900 truncate">{cliente.nombre}</h3>

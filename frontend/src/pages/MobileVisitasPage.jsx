@@ -138,7 +138,7 @@ export default function MobileVisitasPage() {
                     key={visita.id}
                     onClick={() => abrirVisita(visita)}
                     disabled={!!abriendo}
-                    className="w-full text-left bg-white rounded-2xl shadow-card px-4 py-3.5 active:scale-[0.98] transition-all disabled:opacity-60"
+                    className="w-full text-left bg-white rounded-2xl shadow-card px-4 py-3.5 active:scale-[0.97] transition-transform duration-[160ms] disabled:opacity-60"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-bold text-gray-900 truncate">{nombre}</p>

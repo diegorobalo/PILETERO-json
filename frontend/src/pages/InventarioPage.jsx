@@ -18,7 +18,7 @@ function StockBar({ actual, minimo }) {
   const color = actual <= 0 ? 'bg-red-500' : actual < minimo ? 'bg-yellow-400' : 'bg-green-500'
   return (
     <div className="w-full bg-gray-100 rounded-full h-2 mt-1">
-      <div className={`${color} h-2 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+      <div className={`${color} h-2 rounded-full transition-[width] duration-500`} style={{ width: `${pct}%` }} />
     </div>
   )
 }

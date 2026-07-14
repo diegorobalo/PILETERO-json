@@ -264,7 +264,7 @@ export default function MobileClientesPage() {
         {!loading && clientesFiltrados.length > 0 && (
           <div className="space-y-3">
             {clientesFiltrados.map((cliente) => (
-              <div key={cliente.id} className={`bg-white rounded-xl shadow-sm border-l-4 px-4 py-4 ${
+              <div key={cliente.id} className={`stagger-item bg-white rounded-xl shadow-sm border-l-4 px-4 py-4 ${
                   cliente.estado === 'suspendido' ? 'border-l-amber-400 bg-amber-50/40' : 'border-l-sky-400'
                 }`}>
                 <div className="flex items-start justify-between gap-2">

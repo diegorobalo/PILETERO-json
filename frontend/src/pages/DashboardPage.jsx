@@ -211,7 +211,7 @@ export default function DashboardPage() {
                 </div>
                 {esperadoMes > 0 && (
                   <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div className="bg-green-500 h-2 rounded-full transition-all"
+                    <div className="bg-green-500 h-2 rounded-full transition-[width] duration-500"
                       style={{ width: `${Math.min(100, Math.round(cobradoMes / esperadoMes * 100))}%` }} />
                   </div>
                 )}

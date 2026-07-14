@@ -249,7 +249,7 @@ export default function VisitFormPage() {
         <button
           onClick={handleSaveVisit}
           disabled={saving}
-          className={`w-full px-4 py-4 font-bold text-white rounded-xl text-lg transition-all active:scale-[0.98] ${
+          className={`w-full px-4 py-4 font-bold text-white rounded-xl text-lg transition-transform duration-[160ms] active:scale-[0.97] ${
             saving ? 'bg-gray-400 cursor-not-allowed' : 'bg-sky-600 active:bg-sky-700'
           }`}
         >
@@ -258,7 +258,7 @@ export default function VisitFormPage() {
         <button
           onClick={handleBack}
           disabled={saving}
-          className="w-full px-4 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl transition-all active:scale-[0.98] disabled:opacity-50"
+          className="w-full px-4 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl transition-transform duration-[160ms] active:scale-[0.97] disabled:opacity-50"
         >
           ← Volver
         </button>

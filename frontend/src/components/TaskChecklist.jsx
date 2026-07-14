@@ -38,7 +38,7 @@ export default function TaskChecklist({ tasks, onChange }) {
             <button
               key={option.id}
               onClick={() => handleToggleTask(option.id)}
-              className={`w-full px-4 py-3 rounded border-2 text-left transition-all active:scale-95 ${
+              className={`w-full px-4 py-3 rounded border-2 text-left transition-transform duration-[160ms] active:scale-[0.97] ${
                 isSelected
                   ? 'bg-green-100 border-green-300'
                   : 'bg-gray-100 border-gray-300'

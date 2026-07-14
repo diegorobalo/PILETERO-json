@@ -345,7 +345,7 @@ export default function AgendaPage() {
             <div className="flex items-center gap-3">
               <div className="flex-1 bg-white/20 rounded-full h-2">
                 <div
-                  className="bg-white rounded-full h-2 transition-all duration-500"
+                  className="bg-white rounded-full h-2 transition-[width] duration-500"
                   style={{ width: clientesDeHoy.length ? `${(getCompletedCount() / clientesDeHoy.length) * 100}%` : '0%' }}
                 />
               </div>

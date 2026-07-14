@@ -136,7 +136,7 @@ export default function DosisCalculadora({ volumenLitros, cloroActual, phActual,
             <button
               key={c.id}
               onClick={() => setCondicion(c.id)}
-              className={`p-3 rounded-xl border-2 text-left transition-all active:scale-95 ${
+              className={`p-3 rounded-xl border-2 text-left transition-transform duration-[160ms] active:scale-[0.97] ${
                 condicion === c.id
                   ? 'border-blue-500 bg-blue-50'
                   : 'border-gray-200 bg-white'

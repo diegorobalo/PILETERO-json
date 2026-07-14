@@ -202,7 +202,7 @@ export default function MobileInventarioPage() {
                         <div className="mt-2">
                           <div className="bg-gray-200 rounded-full h-1.5 w-full">
                             <div
-                              className={`rounded-full h-1.5 transition-all ${
+                              className={`rounded-full h-1.5 transition-[width] duration-500 ${
                                 ins.stock_actual <= 0 ? 'bg-red-500' :
                                 ins.stock_actual < ins.stock_minimo ? 'bg-amber-400' : 'bg-green-500'
                               }`}
