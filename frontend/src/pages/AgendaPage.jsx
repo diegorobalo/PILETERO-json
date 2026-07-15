@@ -75,6 +75,24 @@ function formatDateSpanish(dateStr) {
   });
 }
 
+function useCountUp(target, duration = 900) {
+  const [val, setVal] = useState(0)
+  useEffect(() => {
+    if (!target) { setVal(0); return }
+    let raf
+    const start = performance.now()
+    function step(now) {
+      const t = Math.min((now - start) / duration, 1)
+      setVal(Math.round((1 - Math.pow(1 - t, 3)) * target))
+      if (t < 1) raf = requestAnimationFrame(step)
+      else setVal(target)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [target, duration])
+  return val
+}
+
 export default function AgendaPage() {
   const navigate = useNavigate();
   const fecha = getTodayDate();
@@ -318,6 +336,11 @@ export default function AgendaPage() {
     .filter((c) => c.estado === 'activo')
     .filter((c) => !agendaIds.has(c.id));
 
+  const completadosHoy = getCompletedCount()
+  const animTotal      = useCountUp(clientesDeHoy.length)
+  const animHechos     = useCountUp(completadosHoy)
+  const animPendientes = useCountUp(clientesDeHoy.length - completadosHoy)
+
   if (loading) {
     return (
       <div className="min-h-screen bg-sky-50 flex items-center justify-center">
@@ -340,19 +363,35 @@ export default function AgendaPage() {
               {syncStatus === 'online' ? 'Conectado' : 'Sin conexión'}
             </span>
           </div>
-          <p className="text-sky-100 text-sm capitalize mb-3">{formatDateSpanish(fecha)}</p>
+          <p className="text-sky-100 text-sm capitalize mb-2">{formatDateSpanish(fecha)}</p>
           {clientesDeHoy.length > 0 && (
-            <div className="flex items-center gap-3">
-              <div className="flex-1 bg-white/20 rounded-full h-2">
-                <div
-                  className="bg-white rounded-full h-2 transition-[width] duration-500"
-                  style={{ width: clientesDeHoy.length ? `${(getCompletedCount() / clientesDeHoy.length) * 100}%` : '0%' }}
-                />
+            <>
+              <div className="flex gap-2 mb-3">
+                <div className="bg-white/20 rounded-xl flex-1 py-2 text-center">
+                  <p className="text-white text-xl font-black leading-none">{animTotal}</p>
+                  <p className="text-sky-100 text-xs mt-0.5">clientes</p>
+                </div>
+                <div className="bg-white/20 rounded-xl flex-1 py-2 text-center">
+                  <p className="text-emerald-300 text-xl font-black leading-none">{animHechos}</p>
+                  <p className="text-sky-100 text-xs mt-0.5">listos ✓</p>
+                </div>
+                <div className="bg-white/20 rounded-xl flex-1 py-2 text-center">
+                  <p className="text-amber-200 text-xl font-black leading-none">{animPendientes}</p>
+                  <p className="text-sky-100 text-xs mt-0.5">pendientes</p>
+                </div>
               </div>
-              <p className="text-white text-xs font-bold whitespace-nowrap">
-                {getCompletedCount()}/{clientesDeHoy.length} listas
-              </p>
-            </div>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 bg-white/20 rounded-full h-2">
+                  <div
+                    className="bg-white rounded-full h-2 transition-[width] duration-500"
+                    style={{ width: clientesDeHoy.length ? `${(getCompletedCount() / clientesDeHoy.length) * 100}%` : '0%' }}
+                  />
+                </div>
+                <p className="text-white text-xs font-bold whitespace-nowrap">
+                  {getCompletedCount()}/{clientesDeHoy.length} listas
+                </p>
+              </div>
+            </>
           )}
         </div>
 
