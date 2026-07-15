@@ -329,7 +329,7 @@ export default function AgendaPage() {
   return (
     <div className="min-h-screen bg-sky-50 pb-24">
       {/* Header */}
-      <div className="bg-gradient-to-br from-sky-700 to-cyan-600 sticky top-0 z-10">
+      <div className="bg-gradient-to-br from-sky-700 to-cyan-600 sticky top-0 z-10 relative">
         <div className="px-4 pt-5 pb-3">
           <div className="flex items-start justify-between mb-0.5">
             <h1 className="text-2xl font-black text-white tracking-tight">Agenda del día</h1>
@@ -383,10 +383,10 @@ export default function AgendaPage() {
             </button>
           )}
         </div>
-        <div className="absolute bottom-0 left-0 right-0 h-5 overflow-hidden pointer-events-none" aria-hidden="true">
-          <svg viewBox="0 0 800 20" preserveAspectRatio="none" className="wave-anim absolute top-0 left-0 h-full" style={{width:'200%'}}>
-            <path d="M0,10 C133,0 266,20 400,10 C533,0 666,20 800,10 L800,20 L0,20 Z" fill="white" fillOpacity="0.12"/>
-            <path d="M0,14 C150,3 250,20 400,13 C550,5 650,20 800,14 L800,20 L0,20 Z" fill="white" fillOpacity="0.28"/>
+        <div className="absolute bottom-0 left-0 right-0 h-8 overflow-hidden pointer-events-none" aria-hidden="true">
+          <svg viewBox="0 0 800 32" preserveAspectRatio="none" className="wave-anim absolute top-0 left-0 h-full" style={{width:'200%'}}>
+            <path d="M0,16 C133,0 266,32 400,16 C533,0 666,32 800,16 L800,32 L0,32 Z" fill="white" fillOpacity="0.2"/>
+            <path d="M0,22 C150,6 250,32 400,20 C550,8 650,32 800,22 L800,32 L0,32 Z" fill="white" fillOpacity="0.45"/>
           </svg>
         </div>
       </div>
