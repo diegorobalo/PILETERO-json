@@ -40,6 +40,24 @@ function formatFecha(dateStr) {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
+function useCountUp(target, duration = 900) {
+  const [val, setVal] = useState(0)
+  useEffect(() => {
+    if (!target) { setVal(0); return }
+    let raf
+    const start = performance.now()
+    function step(now) {
+      const t = Math.min((now - start) / duration, 1)
+      setVal(Math.round((1 - Math.pow(1 - t, 3)) * target))
+      if (t < 1) raf = requestAnimationFrame(step)
+      else setVal(target)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [target, duration])
+  return val
+}
+
 export default function FinancePage() {
   const navigate = useNavigate()
   const [clientes, setClientes] = useState([])
@@ -236,6 +254,18 @@ export default function FinancePage() {
   const totalEsperado = conPrecio.reduce((s, c) => s + c.esperado, 0)
   const totalCobrado = conPrecio.reduce((s, c) => s + Math.min(c.totalPagado, c.esperado), 0)
   const totalDeuda = conPrecio.reduce((s, c) => s + c.deuda, 0)
+
+  const gastosMes = gastos.filter(g => g.fecha?.startsWith(mes))
+  const totalGastosMes = gastosMes.reduce((s, g) => s + (g.monto || 0), 0)
+  const totalExtrasMes = getExtrasTotal(mes)
+  const gananciaVal = totalCobrado + totalExtrasMes - totalGastosMes
+
+  const animEsperado  = useCountUp(totalEsperado)
+  const animCobrado   = useCountUp(totalCobrado)
+  const animDeuda     = useCountUp(totalDeuda)
+  const animGastos    = useCountUp(totalGastosMes)
+  const animGanancia  = useCountUp(Math.abs(gananciaVal))
+
   const pagosFiltrados = mes ? pagos.filter(p => pagoMatchMes(p, mes) && clientesActivos.some(c => c.id === p.cliente_id)) : pagos.filter(p => clientesActivos.some(c => c.id === p.cliente_id))
 
   return (
@@ -281,47 +311,39 @@ export default function FinancePage() {
             <div className="grid grid-cols-3 gap-2 mb-6">
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3">
                 <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Esperado</p>
-                <p className="text-base font-black text-gray-700">${totalEsperado.toLocaleString('es-AR')}</p>
+                <p className="text-base font-black text-gray-700">${animEsperado.toLocaleString('es-AR')}</p>
                 <p className="text-xs text-gray-400 mt-0.5">{conPrecio.length} clientes</p>
               </div>
               <div className="bg-white rounded-xl shadow-sm border border-green-100 p-3">
                 <p className="text-xs text-green-500 uppercase tracking-wide mb-1">Cobrado</p>
-                <p className="text-base font-black text-green-700">${totalCobrado.toLocaleString('es-AR')}</p>
+                <p className="text-base font-black text-green-700">${animCobrado.toLocaleString('es-AR')}</p>
                 <p className="text-xs text-green-400 mt-0.5">{conPrecio.filter(c => c.pagado).length} pagaron</p>
               </div>
               <div className="bg-white rounded-xl shadow-sm border border-red-100 p-3">
                 <p className="text-xs text-red-400 uppercase tracking-wide mb-1">Pendiente</p>
-                <p className="text-base font-black text-red-600">${totalDeuda.toLocaleString('es-AR')}</p>
+                <p className="text-base font-black text-red-600">${animDeuda.toLocaleString('es-AR')}</p>
                 <p className="text-xs text-red-300 mt-0.5">{conPrecio.filter(c => c.deuda > 0).length} deben</p>
               </div>
             </div>
 
-            {(() => {
-              const gastosMes = gastos.filter(g => g.fecha?.startsWith(mes))
-              const totalGastosMes = gastosMes.reduce((s, g) => s + (g.monto || 0), 0)
-              const totalExtrasMes = getExtrasTotal(mes)
-              const ganancia = totalCobrado + totalExtrasMes - totalGastosMes
-              return (
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  {totalExtrasMes > 0 && (
-                    <div className="bg-white rounded-xl shadow-sm border border-purple-100 p-3">
-                      <p className="text-xs text-purple-500 uppercase tracking-wide mb-1">Extras</p>
-                      <p className="text-base font-black text-purple-700">${totalExtrasMes.toLocaleString('es-AR')}</p>
-                      <p className="text-xs text-purple-300 mt-0.5">trabajos adicionales</p>
-                    </div>
-                  )}
-                  <div className="bg-white rounded-xl shadow-sm border border-orange-100 p-3">
-                    <p className="text-xs text-orange-400 uppercase tracking-wide mb-1">Gastado</p>
-                    <p className="text-base font-black text-orange-600">${totalGastosMes.toLocaleString('es-AR')}</p>
-                    <p className="text-xs text-orange-300 mt-0.5">{gastosMes.length} gasto(s)</p>
-                  </div>
-                  <div className={`bg-white rounded-xl shadow-sm p-3 border ${ganancia >= 0 ? 'border-green-100' : 'border-red-100'} ${totalExtrasMes > 0 ? '' : 'col-start-2'}`}>
-                    <p className={`text-xs uppercase tracking-wide mb-1 ${ganancia >= 0 ? 'text-green-500' : 'text-red-400'}`}>Ganancia neta</p>
-                    <p className={`text-base font-black ${ganancia >= 0 ? 'text-green-700' : 'text-red-600'}`}>${ganancia.toLocaleString('es-AR')}</p>
-                  </div>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              {totalExtrasMes > 0 && (
+                <div className="bg-white rounded-xl shadow-sm border border-purple-100 p-3">
+                  <p className="text-xs text-purple-500 uppercase tracking-wide mb-1">Extras</p>
+                  <p className="text-base font-black text-purple-700">${totalExtrasMes.toLocaleString('es-AR')}</p>
+                  <p className="text-xs text-purple-300 mt-0.5">trabajos adicionales</p>
                 </div>
-              )
-            })()}
+              )}
+              <div className="bg-white rounded-xl shadow-sm border border-orange-100 p-3">
+                <p className="text-xs text-orange-400 uppercase tracking-wide mb-1">Gastado</p>
+                <p className="text-base font-black text-orange-600">${animGastos.toLocaleString('es-AR')}</p>
+                <p className="text-xs text-orange-300 mt-0.5">{gastosMes.length} gasto(s)</p>
+              </div>
+              <div className={`bg-white rounded-xl shadow-sm p-3 border ${gananciaVal >= 0 ? 'border-green-100' : 'border-red-100'} ${totalExtrasMes > 0 ? '' : 'col-start-2'}`}>
+                <p className={`text-xs uppercase tracking-wide mb-1 ${gananciaVal >= 0 ? 'text-green-500' : 'text-red-400'}`}>Ganancia neta</p>
+                <p className={`text-base font-black ${gananciaVal >= 0 ? 'text-green-700' : 'text-red-600'}`}>{gananciaVal < 0 ? '-' : ''}${animGanancia.toLocaleString('es-AR')}</p>
+              </div>
+            </div>
 
             {/* Desglose de extras del mes */}
             {(() => {
