@@ -313,6 +313,16 @@ export default function AgendaPage() {
     setModalRuta(null);
   }
 
+  function moverEnRuta(idx, dir) {
+    setModalRuta(prev => {
+      const next = [...prev];
+      const j = idx + dir;
+      if (j < 0 || j >= next.length) return prev;
+      [next[idx], next[j]] = [next[j], next[idx]];
+      return next;
+    });
+  }
+
   useEffect(() => {
     cargarDatos();
     const goOffline = () => setSyncStatus('offline');
@@ -621,16 +631,28 @@ export default function AgendaPage() {
               <h2 className="text-lg font-bold text-gray-900">🗺️ Ruta de hoy</h2>
               <button onClick={() => setModalRuta(null)} className="text-gray-400 text-xl font-bold w-8 h-8 flex items-center justify-center">✕</button>
             </div>
-            <p className="text-xs text-gray-400 px-6 pb-3">Las letras corresponden a las paradas en Google Maps</p>
+            <p className="text-xs text-gray-400 px-6 pb-3">Usá las flechas para ordenar las paradas antes de abrir Maps</p>
             <div className="space-y-2 px-6 pb-4 max-h-72 overflow-y-auto">
               {modalRuta.map((cliente, i) => (
-                <div key={cliente.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3">
+                <div key={cliente.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-3">
                   <span className="w-7 h-7 rounded-full bg-sky-600 text-white text-xs font-black flex items-center justify-center flex-shrink-0">
                     {String.fromCharCode(65 + i)}
                   </span>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="font-semibold text-gray-900 truncate">{cliente.nombre}</p>
                     <p className="text-xs text-gray-400 truncate">{cliente.direccion}</p>
+                  </div>
+                  <div className="flex flex-col gap-0.5 flex-shrink-0">
+                    <button
+                      onClick={() => moverEnRuta(i, -1)}
+                      disabled={i === 0}
+                      className="w-8 h-7 flex items-center justify-center rounded-lg text-sky-600 bg-sky-50 active:bg-sky-100 disabled:opacity-20 text-base leading-none"
+                    >▲</button>
+                    <button
+                      onClick={() => moverEnRuta(i, 1)}
+                      disabled={i === modalRuta.length - 1}
+                      className="w-8 h-7 flex items-center justify-center rounded-lg text-sky-600 bg-sky-50 active:bg-sky-100 disabled:opacity-20 text-base leading-none"
+                    >▼</button>
                   </div>
                 </div>
               ))}
