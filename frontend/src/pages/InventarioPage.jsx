@@ -208,6 +208,7 @@ export default function InventarioPage() {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Insumo</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Stock actual</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Mínimo</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Precio</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Estado</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Acciones</th>
                   </tr>
@@ -222,6 +223,11 @@ export default function InventarioPage() {
                         <StockBar actual={ins.stock_actual} minimo={ins.stock_minimo} />
                       </td>
                       <td className="px-6 py-4 text-gray-500">{ins.stock_minimo} {ins.unidad}</td>
+                      <td className="px-6 py-4 text-gray-600 text-sm">
+                        {ins.precio_unitario
+                          ? `$${ins.precio_unitario.toLocaleString('es-AR')}/${ins.unidad === 'g' ? 'kg' : ins.unidad === 'ml' ? 'L' : (ins.unidad || 'u')}`
+                          : <span className="text-gray-300">—</span>}
+                      </td>
                       <td className="px-6 py-4">{badge(ins.stock_actual, ins.stock_minimo)}</td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2 flex-wrap">

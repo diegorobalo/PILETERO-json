@@ -265,6 +265,21 @@ router.post('/visitas', async (req, res) => {
       )
     );
 
+    // Descontar stock de extras que referencian insumos del inventario
+    let extrasArr = [];
+    try {
+      const rawExtras = req.body.extras || [];
+      extrasArr = typeof rawExtras === 'string' ? JSON.parse(rawExtras) : rawExtras;
+    } catch {}
+    await Promise.all(
+      extrasArr
+        .filter(e => e.insumo_id && parseFloat(e.cantidad) > 0)
+        .map(extra =>
+          databaseService.ajustarStock(extra.insumo_id, -parseFloat(extra.cantidad), createdVisita.id)
+            .catch(e => console.error(`[visitas] stock deduction failed for extra insumo ${extra.insumo_id}:`, e.message))
+        )
+    );
+
     // Responder con warnings si hubo stock bajo
     const response = { ...createdVisita, warnings };
     res.status(201).json(response);
@@ -303,10 +318,29 @@ router.delete('/visitas/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const visita = await databaseService.queryOne('SELECT * FROM visitas WHERE id = ?', [id]);
-    if (!visita) {
-      return res.status(404).json({ error: 'Visita not found' });
-    }
+    if (!visita) return res.status(404).json({ error: 'Visita not found' });
+
+    let quimicos = [];
+    try { const raw = visita.quimicos_usados; quimicos = Array.isArray(raw) ? raw : JSON.parse(raw || '[]'); } catch {}
+
+    let extrasArr = [];
+    try { const raw = visita.extras; extrasArr = Array.isArray(raw) ? raw : JSON.parse(raw || '[]'); } catch {}
+
     await databaseService.deleteVisita(id);
+
+    // Restore stock for consumed insumos and inventory-linked extras
+    const toRestore = [
+      ...quimicos.filter(q => q.insumo_id && parseFloat(q.cantidad) > 0),
+      ...extrasArr.filter(e => e.insumo_id && parseFloat(e.cantidad) > 0),
+    ];
+    await Promise.all(
+      toRestore.map(item =>
+        databaseService.ajustarStock(item.insumo_id, parseFloat(item.cantidad)).catch(e =>
+          console.error(`[delete visita] stock restore failed insumo ${item.insumo_id}:`, e.message)
+        )
+      )
+    );
+
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting visita:', error);

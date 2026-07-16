@@ -52,17 +52,30 @@ export default function VisitasPage() {
   const [extras, setExtras] = useState([])
   const [extraDescripcion, setExtraDescripcion] = useState('')
   const [extraMonto, setExtraMonto] = useState('')
+  const [extraMode, setExtraMode] = useState('libre') // 'libre' | 'inventario'
+  const [insumos, setInsumos] = useState([])
+  const [extraInsumoId, setExtraInsumoId] = useState('')
+  const [extraCantidad, setExtraCantidad] = useState('')
 
   useEffect(() => { cargar() }, [])
 
   async function cargar() {
     try {
       setLoading(true); setError(null)
-      const [vs, cs] = await Promise.all([apiClient.getVisitas(), apiClient.getClientes()])
+      const [vs, cs, ins] = await Promise.all([apiClient.getVisitas(), apiClient.getClientes(), apiClient.getInventario()])
       setVisitas(vs)
       setClientes(cs)
+      setInsumos((ins || []).filter(i => i.nombre.toLowerCase() !== 'agua'))
     } catch { setError('No se pudo conectar al servidor.') }
     finally { setLoading(false) }
+  }
+
+  function calcularMontoInsumo(insumo, cantidad) {
+    if (!insumo?.precio_unitario || !cantidad) return 0
+    const cant = parseFloat(cantidad)
+    if (isNaN(cant) || cant <= 0) return 0
+    const factor = (insumo.unidad === 'g' || insumo.unidad === 'ml') ? 1000 : 1
+    return (cant / factor) * insumo.precio_unitario
   }
 
   async function eliminarVisita(id) {
@@ -112,6 +125,24 @@ export default function VisitasPage() {
     setExtraMonto('')
   }
 
+  function handleAgregarExtraInventario() {
+    const insumo = insumos.find(i => i.id === parseInt(extraInsumoId, 10))
+    if (!insumo || !extraCantidad) { alert('Seleccioná insumo y cantidad'); return }
+    const cant = parseFloat(extraCantidad)
+    if (isNaN(cant) || cant <= 0) { alert('Cantidad inválida'); return }
+    const monto = calcularMontoInsumo(insumo, cant)
+    setExtras(prev => [...prev, {
+      id: Date.now(),
+      descripcion: insumo.nombre,
+      monto,
+      insumo_id: insumo.id,
+      cantidad: cant,
+      unidad: insumo.unidad,
+    }])
+    setExtraInsumoId('')
+    setExtraCantidad('')
+  }
+
   function handleEliminarExtra(id) {
     setExtras(extras.filter(e => e.id !== id))
   }
@@ -150,6 +181,7 @@ export default function VisitasPage() {
     setForm({ cliente_id: '', fecha: today, observaciones: '' })
     setTasks([]); setCloro(''); setPh(''); setQuimicosUsados([])
     setExtras([]); setExtraDescripcion(''); setExtraMonto('')
+    setExtraMode('libre'); setExtraInsumoId(''); setExtraCantidad('')
     setEditandoVisitaId(null)
   }
 
@@ -484,16 +516,14 @@ export default function VisitasPage() {
                       <tbody className="space-y-2">
                         {extras.map(extra => (
                           <tr key={extra.id} className="border-b border-purple-200 bg-white bg-opacity-60">
-                            <td className="text-gray-700 py-2">{extra.descripcion}</td>
+                            <td className="text-gray-700 py-2">
+                              {extra.descripcion}
+                              {extra.insumo_id && <span className="ml-1 text-xs text-purple-400">({extra.cantidad} {extra.unidad})</span>}
+                            </td>
                             <td className="text-right text-gray-700 py-2">${extra.monto.toFixed(2)}</td>
                             <td className="text-center py-2">
-                              <button
-                                type="button"
-                                onClick={() => handleEliminarExtra(extra.id)}
-                                className="text-xs text-red-600 hover:text-red-800 font-semibold"
-                              >
-                                ✕
-                              </button>
+                              <button type="button" onClick={() => handleEliminarExtra(extra.id)}
+                                className="text-xs text-red-600 hover:text-red-800 font-semibold">✕</button>
                             </td>
                           </tr>
                         ))}
@@ -507,31 +537,66 @@ export default function VisitasPage() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-3 gap-2">
-                  <input
-                    type="text"
-                    value={extraDescripcion}
-                    onChange={e => setExtraDescripcion(e.target.value)}
-                    placeholder="Descripción"
-                    className="col-span-2 border border-purple-300 rounded px-3 py-2 text-sm"
-                  />
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={extraMonto}
-                    onChange={e => setExtraMonto(e.target.value)}
-                    placeholder="Monto"
-                    className="border border-purple-300 rounded px-3 py-2 text-sm"
-                  />
+                {/* Tabs: texto libre vs del inventario */}
+                <div className="flex gap-1 mb-3">
+                  <button type="button" onClick={() => setExtraMode('libre')}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${extraMode === 'libre' ? 'bg-purple-600 text-white' : 'bg-white text-purple-600 border border-purple-300'}`}>
+                    Texto libre
+                  </button>
+                  <button type="button" onClick={() => setExtraMode('inventario')}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${extraMode === 'inventario' ? 'bg-purple-600 text-white' : 'bg-white text-purple-600 border border-purple-300'}`}>
+                    Del inventario
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleAgregarExtra}
-                  className="w-full mt-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded"
-                >
-                  + Agregar extra
-                </button>
+
+                {extraMode === 'libre' ? (
+                  <>
+                    <div className="grid grid-cols-3 gap-2">
+                      <input type="text" value={extraDescripcion} onChange={e => setExtraDescripcion(e.target.value)}
+                        placeholder="Descripción" className="col-span-2 border border-purple-300 rounded px-3 py-2 text-sm" />
+                      <input type="number" step="0.01" min="0" value={extraMonto} onChange={e => setExtraMonto(e.target.value)}
+                        placeholder="Monto" className="border border-purple-300 rounded px-3 py-2 text-sm" />
+                    </div>
+                    <button type="button" onClick={handleAgregarExtra}
+                      className="w-full mt-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded">
+                      + Agregar extra
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      <select value={extraInsumoId} onChange={e => setExtraInsumoId(e.target.value)}
+                        className="col-span-2 border border-purple-300 rounded px-3 py-2 text-sm">
+                        <option value="">-- Seleccioná insumo --</option>
+                        {insumos.map(i => (
+                          <option key={i.id} value={i.id}>
+                            {i.nombre} ({i.stock_actual} {i.unidad})
+                          </option>
+                        ))}
+                      </select>
+                      <input type="number" step="0.01" min="0" value={extraCantidad}
+                        onChange={e => setExtraCantidad(e.target.value)}
+                        placeholder={`Cantidad (${insumos.find(i => i.id === parseInt(extraInsumoId))?.unidad || '…'})`}
+                        className="border border-purple-300 rounded px-3 py-2 text-sm" />
+                    </div>
+                    {extraInsumoId && extraCantidad && (() => {
+                      const ins = insumos.find(i => i.id === parseInt(extraInsumoId))
+                      const monto = calcularMontoInsumo(ins, extraCantidad)
+                      return ins?.precio_unitario ? (
+                        <p className="text-xs text-purple-600 mb-2">
+                          💰 Monto calculado: <strong>${monto.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</strong>
+                          {' '}· descuenta {parseFloat(extraCantidad)} {ins.unidad} del stock
+                        </p>
+                      ) : (
+                        <p className="text-xs text-orange-500 mb-2">⚠️ Este insumo no tiene precio configurado</p>
+                      )
+                    })()}
+                    <button type="button" onClick={handleAgregarExtraInventario}
+                      className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded">
+                      + Agregar del inventario
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
