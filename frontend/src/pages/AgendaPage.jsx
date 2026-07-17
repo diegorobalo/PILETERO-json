@@ -298,7 +298,7 @@ export default function AgendaPage() {
   }
 
   function abrirRutaMaps() {
-    const pendientes = clientesDeHoy.filter(c => getClienteStatus(c.id) !== 'completado' && c.direccion);
+    const pendientes = clientesDeHoy.filter(c => getClienteStatus(c.id) !== 'completado');
     if (pendientes.length === 0) {
       toastInfo('¡Todas las visitas de hoy están completadas! 🎉');
       return;
@@ -308,7 +308,12 @@ export default function AgendaPage() {
 
   function confirmarRuta() {
     if (!modalRuta) return;
-    const url = `https://www.google.com/maps/dir/${modalRuta.map(c => encodeURIComponent(c.direccion)).join('/')}`;
+    const conDireccion = modalRuta.filter(c => c.direccion);
+    if (conDireccion.length === 0) {
+      toastInfo('Ningún cliente tiene dirección cargada para navegar en Maps');
+      return;
+    }
+    const url = `https://www.google.com/maps/dir/${conDireccion.map(c => encodeURIComponent(c.direccion)).join('/')}`;
     window.open(url, '_blank');
     setModalRuta(null);
   }
@@ -469,7 +474,7 @@ export default function AgendaPage() {
 
         {/* Botón hoja de ruta */}
         {(() => {
-          const paradasPendientes = clientesDeHoy.filter(c => getClienteStatus(c.id) !== 'completado' && c.direccion).length;
+          const paradasPendientes = clientesDeHoy.filter(c => getClienteStatus(c.id) !== 'completado').length;
           return paradasPendientes > 0 ? (
             <button
               onClick={abrirRutaMaps}
@@ -640,7 +645,9 @@ export default function AgendaPage() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-gray-900 truncate">{cliente.nombre}</p>
-                    <p className="text-xs text-gray-400 truncate">{cliente.direccion}</p>
+                    {cliente.direccion
+                      ? <p className="text-xs text-gray-400 truncate">{cliente.direccion}</p>
+                      : <p className="text-xs text-amber-500">Sin dirección · no se incluye en Maps</p>}
                   </div>
                   <div className="flex flex-col gap-0.5 flex-shrink-0">
                     <button
