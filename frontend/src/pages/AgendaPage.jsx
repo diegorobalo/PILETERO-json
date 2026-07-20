@@ -313,13 +313,9 @@ export default function AgendaPage() {
       toastInfo('Ningún cliente tiene dirección cargada para navegar en Maps');
       return;
     }
-    // api=1 format: origin omitted → Maps usa GPS actual; waypoints con | para múltiples paradas
-    const destino = encodeURIComponent(conDireccion[conDireccion.length - 1].direccion);
-    const paradas = conDireccion.slice(0, -1).map(c => encodeURIComponent(c.direccion));
-    let url = `https://www.google.com/maps/dir/?api=1&destination=${destino}`;
-    if (paradas.length > 0) {
-      url += `&waypoints=${paradas.join('|')}`;
-    }
+    // Path format: primer segmento vacío (//) = GPS como origen; cada dirección es una parada
+    const addrs = conDireccion.map(c => encodeURIComponent(c.direccion)).join('/');
+    const url = `https://www.google.com/maps/dir//${addrs}`;
     window.open(url, '_blank');
     setModalRuta(null);
   }
