@@ -664,7 +664,7 @@ export default function AgendaPage() {
                 onClick={confirmarRuta}
                 className="w-full py-4 bg-sky-600 text-white font-bold rounded-xl text-base active:bg-sky-700"
               >
-                Abrir en Google Maps →
+                Abrir en Google Maps → ({modalRuta?.length} {modalRuta?.length === 1 ? 'parada' : 'paradas'})
               </button>
             </div>
           </div>
