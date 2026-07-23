@@ -298,7 +298,7 @@ export default function AgendaPage() {
   }
 
   function abrirRutaMaps() {
-    const pendientes = clientesDeHoy.filter(c => getClienteStatus(c.id) !== 'completado');
+    const pendientes = clientesDeHoy.filter(c => getClienteStatus(c.id) !== 'completado' && c.direccion);
     if (pendientes.length === 0) {
       toastInfo('¡Todas las visitas de hoy están completadas! 🎉');
       return;
@@ -308,12 +308,7 @@ export default function AgendaPage() {
 
   function confirmarRuta() {
     if (!modalRuta) return;
-    const conDireccion = modalRuta.filter(c => c.direccion);
-    if (conDireccion.length === 0) {
-      toastInfo('Ningún cliente tiene dirección cargada para navegar en Maps');
-      return;
-    }
-    const url = `https://www.google.com/maps/dir/${conDireccion.map(c => encodeURIComponent(c.direccion)).join('/')}`;
+    const url = `https://www.google.com/maps/dir/${modalRuta.map(c => encodeURIComponent(c.direccion)).join('/')}`;
     window.open(url, '_blank');
     setModalRuta(null);
   }
@@ -474,7 +469,7 @@ export default function AgendaPage() {
 
         {/* Botón hoja de ruta */}
         {(() => {
-          const paradasPendientes = clientesDeHoy.filter(c => getClienteStatus(c.id) !== 'completado').length;
+          const paradasPendientes = clientesDeHoy.filter(c => getClienteStatus(c.id) !== 'completado' && c.direccion).length;
           return paradasPendientes > 0 ? (
             <button
               onClick={abrirRutaMaps}
