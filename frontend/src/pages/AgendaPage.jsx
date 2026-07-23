@@ -313,19 +313,9 @@ export default function AgendaPage() {
       toastInfo('Ningún cliente tiene dirección cargada para navegar en Maps');
       return;
     }
-    const addrs = conDireccion.map(c => encodeURIComponent(c.direccion)).join('/');
-    const abrir = (origen) => {
-      window.open(`https://www.google.com/maps/dir/${origen}/${addrs}`, '_blank');
-      setModalRuta(null);
-    };
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        ({ coords }) => abrir(`${coords.latitude},${coords.longitude}`),
-        () => abrir('') // GPS denegado → Maps decide el origen
-      );
-    } else {
-      abrir('');
-    }
+    const url = `https://www.google.com/maps/dir/${conDireccion.map(c => encodeURIComponent(c.direccion)).join('/')}`;
+    window.open(url, '_blank');
+    setModalRuta(null);
   }
 
   function moverEnRuta(idx, dir) {
